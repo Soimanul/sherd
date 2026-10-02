@@ -107,6 +107,20 @@ def test_ask_has_no_get_api(client: ClientFactory, demo_db: Path) -> None:
     assert web.get("/ask.json").status_code == 404
 
 
+def test_unreadable_config_is_reported_not_a_crash(
+    client: ClientFactory, demo_db: Path, sherd_home: Path
+) -> None:
+    (sherd_home / "config.json").write_text("[1, 2]", encoding="utf-8")
+    web = client(demo_db, raise_server_exceptions=False)
+    page = web.get("/ask")
+    answer = post(web, {"question": QUESTION})
+
+    for response in (page, answer):
+        assert response.status_code == 200
+        assert t("pages.ask.config_broken_title").replace("'", "&#39;") in response.text
+        assert "config.json" in response.text
+
+
 def test_no_provider_explains_ollama_and_api_keys(client: ClientFactory, demo_db: Path) -> None:
     body = client(demo_db).get("/ask").text
 

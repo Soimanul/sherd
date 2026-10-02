@@ -255,6 +255,7 @@ pages:
     key_body: Set ANTHROPIC_API_KEY or OPENAI_API_KEY in the terminal, then restart sherd web. You see what would be sent, and allow it, before anything goes.
     key_command: ANTHROPIC_API_KEY=your-key sherd web
     no_provider_title: No model to ask.
+    config_broken_title: sherd's config file could not be read.
     no_provider: Ask needs Ollama running on this machine, or an API key for a remote provider.
     offline_no_local: Offline mode only uses a model on this machine, and none is running. Start Ollama, or ask without Offline.
     offline_refused_title: Nothing was sent.

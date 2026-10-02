@@ -22,6 +22,9 @@
 {%- endmacro %}
 
 <div class="ask-result" id="{{ result_id }}">
+  {%- if view.status.broken %}
+  {% call notice("warning", "i-warning") %}<strong>{{ t("pages.ask.config_broken_title") }}</strong> {{ view.status.broken }}{% endcall %}
+  {%- endif %}
   {%- if view.status.refused %}
   {% call notice("warning", "i-warning") %}<strong>{{ t("pages.ask.offline_refused_title") }}</strong> {{ t("pages.ask.offline_refused", reason=view.status.refused) }}{% endcall %}
   {%- elif view.status.no_provider and view.question %}

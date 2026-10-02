@@ -59,17 +59,20 @@ class Status:
     consented: bool = False
     no_provider: str | None = None
     refused: str | None = None
+    broken: str | None = None  # config.json could not be read
 
 
 def provider_status(*, offline: bool = False) -> Status:
     settings = providers.load_settings()
     try:
         choice = resolve(settings, config=config.load(), offline=offline, probe=PROBE)
+        return Status(choice, consented=not choice.remote or config.has_consent(choice.provider))
     except NoProviderError as error:
         return Status(no_provider=str(error))
     except OfflineRefusedError as error:
         return Status(refused=str(error))
-    return Status(choice, consented=not choice.remote or config.has_consent(choice.provider))
+    except ValueError as error:
+        return Status(broken=f"{config.config_path()}: {error}")
 
 
 def ollama_model() -> str:

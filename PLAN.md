@@ -469,7 +469,7 @@ Paths are relative to `packages/<pkg>/src/<import name>/` unless they start at t
 | 15 | Web pages | `sherd_web/routes/`, `sherd_web/templates/pages/` | 11, 13, 14b | All pages render on the demo DB; Lighthouse a11y ≥ 90; CSP test. |
 | 16 | CLI + TUI polish | `sherd_cli/tui/`, `sherd_cli/commands/export.py`, help/error texts | 09, 13 | `sherd dig/ask/show/demo/wrapped/export`; TUI dashboard; helpful errors. |
 | 17 | MCP server | `packages/mcp` | 13 | stdio MCP with read-only query, describe, insights; tested with an MCP client. |
-| 18 | Wrapped generator | `sherd_insights/wrapped.py`, `sherd_cli/commands/wrapped.py` | 10, 11, 14a | 6 PNG cards from the demo DB; deterministic; no raw text by default; registers `sherd_web/static/fonts/ttf/` with vl-convert (it ignores woff2) and a test proves the PNG uses Fira Sans. |
+| 18 | Wrapped generator + Wrapped page | `sherd_insights/wrapped.py`, `sherd_cli/commands/wrapped.py`, `sherd_web/routes/wrapped.py`, `sherd_web/templates/pages/wrapped.html` | 10, 11, 14a | 6 PNG cards from the demo DB; deterministic; no raw text by default; registers `sherd_web/static/fonts/ttf/` with vl-convert (it ignores woff2) and a test proves the PNG uses Fira Sans. |
 | 19 | Rust WhatsApp parser | `crates/sherd-wa` | 04 | Same golden tests through PyO3; ≥10× faster on a 1 GB synthetic export; wheels built in CI. |
 | 20 | Packaging + install + docs + landing | `docs/`, `.github/workflows/release.yml`, install script | 15, 16 | `uv tool install sherd-cli`, `pipx install sherd-cli` and a `curl … \| sh` install script work on a clean macOS and Linux machine; docs site builds. |
 | 21 | Launch kit | `docs/launch/` | 18, 20 | Show HN text, Reddit posts, 60-s GIF script, FAQ, Wrapped share flow tested. |

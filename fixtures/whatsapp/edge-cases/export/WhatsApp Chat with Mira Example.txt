@@ -1,0 +1,15 @@
+29/03/2026, 02:59 - Alex Demo: Before the clock gap
+29/03/2026, 03:30 - Mira Example: In the clock gap
+29/03/2026, 04:31 - Alex Demo: This message was deleted
+29/03/2026, 04:32 - Mira Example: You deleted this message
+29/03/2026, 04:33 - +1 555 0100: IMG-20260329-WA0001.jpg (file attached)
+
+29/03/2026, 04:34 - Mira Example: ok
+29/03/2026, 04:34 - Mira Example: ok
+29/03/2026, 04:35 - Missed voice call
+29/03/2026, 04:36 - Your security code with Mira Example changed
+29/03/2026, 04:37 - Mira Example: IMG-20260329-WA0002.jpg (file attached)
+Paper moon caption
+31/02/2026, 04:38 - Alex Demo: Invalid date record
+29/03/2026, 25:38 - Mira Example: Invalid clock record
+29/03/2026, 04:39 - Alex Demo: Valid after malformed records

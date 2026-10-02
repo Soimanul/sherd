@@ -10,6 +10,7 @@ import pkgutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import duckdb
 import pyarrow as pa
@@ -51,7 +52,7 @@ SECURITY_HEADERS = {
 }
 # The server binds to loopback; checking Host as well stops DNS-rebinding pages
 # from reading the database through the user's browser.
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "[::1]"]
 TABLE_ROWS_SHOWN = 200
 START_HERE = 3
 # Home's preferred "start here" charts, by dig id; the rest are picked by source.
@@ -198,7 +199,19 @@ def summary(counts: dict[str, int]) -> str:
 
 def create_app(db_path: Path, *, demo: bool) -> FastAPI:
     """The web UI over the database at `db_path`, which is only ever opened read-only."""
-    app = FastAPI(title="sherd", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(
+        title="sherd",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        telemetry={
+            "tracing": False,
+            "metrics": False,
+            "logs": False,
+            "operation_spans": False,
+            "auto_configure": False,
+        },
+    )
     app.state.settings = Settings(db_path=Path(db_path), demo=demo)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
     app.add_middleware(SecurityHeaders)
@@ -240,12 +253,18 @@ def create_app(db_path: Path, *, demo: bool) -> FastAPI:
     async def server_error(request: Request, error: Exception) -> Response:
         # Starlette sends this response outside the middleware stack, so the
         # headers are added here as well.
-        logger.error("request failed: path=%s error=%s", request.url.path, type(error).__name__)
+        request_id = uuid4().hex
+        logger.error("request failed: error=%s request_id=%s", type(error).__name__, request_id)
         detail = _error_detail(error)
         response = render(
             request,
             "shell/error.html",
-            {"status": 500, "title": "Something went wrong", "detail": detail},
+            {
+                "status": 500,
+                "title": "Something went wrong",
+                "detail": detail,
+                "request_id": request_id,
+            },
             status_code=500,
         )
         response.headers.update(SECURITY_HEADERS)

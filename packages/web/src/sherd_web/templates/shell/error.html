@@ -18,6 +18,9 @@
     {%- else %}
     <p class="empty-body">The server answered {{ status }}. Go back to Home and try again from there.</p>
     {%- endif %}
+    {%- if request_id %}
+    <p class="empty-body">Request id: <code>{{ request_id }}</code>. Use this id to find the error in the terminal.</p>
+    {%- endif %}
     <div class="empty-actions">
       <a class="btn btn-primary" href="/">{{ icon("i-home") }}<span>Go to Home</span></a>
     </div>

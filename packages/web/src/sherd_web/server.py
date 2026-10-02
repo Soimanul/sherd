@@ -1,6 +1,9 @@
 """Run the web app on loopback only."""
 
+import logging
+import os
 import webbrowser
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -12,12 +15,26 @@ HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 
 
+class PrivateErrors(logging.Filter):
+    """Keep ASGI exception details out of terminal logs unless explicitly requested."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if os.environ.get("SHERD_DEBUG") != "1":
+            record.exc_info = None
+            record.exc_text = None
+            record.stack_info = None
+        return True
+
+
 def url(port: int) -> str:
     return f"http://{HOST}:{port}/"
 
 
 def config(db_path: Path, *, demo: bool, port: int = DEFAULT_PORT) -> uvicorn.Config:
     """Server settings: 127.0.0.1 only, no proxy headers, no access log (it holds paths)."""
+    log_config = deepcopy(uvicorn.config.LOGGING_CONFIG)
+    log_config["filters"] = {"private_errors": {"()": PrivateErrors}}
+    log_config["loggers"]["uvicorn.error"]["filters"] = ["private_errors"]
     return uvicorn.Config(
         create_app(db_path, demo=demo),
         host=HOST,
@@ -26,6 +43,7 @@ def config(db_path: Path, *, demo: bool, port: int = DEFAULT_PORT) -> uvicorn.Co
         server_header=False,
         access_log=False,
         log_level="warning",
+        log_config=log_config,
     )
 
 

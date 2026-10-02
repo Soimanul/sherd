@@ -202,6 +202,44 @@ def test_foreign_host_is_refused(client: ClientFactory, demo_db: Path) -> None:
     assert response.headers["content-security-policy"] == CSP
 
 
+@pytest.mark.parametrize(
+    "host", ["localhost", "localhost:8765", "127.0.0.1:8765", "[::1]", "[::1]:8765"]
+)
+def test_loopback_host_forms_are_allowed(client: ClientFactory, tmp_path: Path, host: str) -> None:
+    assert client(tmp_path / "missing.duckdb").get("/", headers={"host": host}).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "evil.test",
+        "evil.test:8765",
+        "localhost.evil.test",
+        "localhost.evil.test:8765",
+        "127.0.0.1.evil.test",
+        "[::2]",
+        "[::2]:8765",
+        "localhost:bad",
+        "localhost:",
+        "localhost:12:34",
+        "[::1]:bad",
+        "[::1]:",
+        "[::1]:12:34",
+        "[::1",
+        "::1",
+        "user@localhost",
+        "localhost@evil.test",
+        "user@[::1]:8765",
+    ],
+)
+def test_foreign_and_malformed_host_forms_are_refused(
+    client: ClientFactory, tmp_path: Path, host: str
+) -> None:
+    response = client(tmp_path / "missing.duckdb").get("/", headers={"host": host})
+    assert response.status_code == 400
+    assert response.headers["content-security-policy"] == CSP
+
+
 # ---- CSP and remote references ----------------------------------------------------------------
 
 

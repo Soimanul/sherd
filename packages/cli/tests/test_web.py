@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ Calls = list[tuple[uvicorn.Config, bool]]
 def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Calls:
     """Capture what `sherd web` would serve instead of starting a real server."""
     monkeypatch.setenv("SHERD_HOME", str(tmp_path))
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
     calls: Calls = []
     monkeypatch.setattr(
         server, "serve", lambda config, *, open_browser: calls.append((config, open_browser))
@@ -73,3 +75,33 @@ def test_rejects_bad_port(served: Calls) -> None:
 
     assert result.exit_code != 0
     assert served == []
+
+
+def test_web_disables_inherited_telemetry_before_app_start(
+    served: Calls, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exporter_vars = [
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+        "OTEL_TRACES_EXPORTER",
+        "OTEL_METRICS_EXPORTER",
+        "OTEL_LOGS_EXPORTER",
+    ]
+    for name in exporter_vars:
+        monkeypatch.setenv(name, "inherited-probe")
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
+    monkeypatch.setenv("OTEL_SERVICE_NAME", "preserved-probe")
+    real_config = server.config
+
+    def checked_config(db_path: Path, *, demo: bool, port: int) -> uvicorn.Config:
+        assert os.environ["OTEL_SDK_DISABLED"] == "true"
+        assert all(name not in os.environ for name in exporter_vars)
+        assert os.environ["OTEL_SERVICE_NAME"] == "preserved-probe"
+        return real_config(db_path, demo=demo, port=port)
+
+    monkeypatch.setattr(server, "config", checked_config)
+    result = run("--no-open")
+    assert result.exit_code == 0, result.output
+    assert len(served) == 1

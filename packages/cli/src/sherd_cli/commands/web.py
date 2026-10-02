@@ -1,5 +1,6 @@
 """`sherd web`: the local web UI on 127.0.0.1."""
 
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -26,6 +27,10 @@ def register(app: typer.Typer) -> None:
         ] = True,
     ) -> None:
         """Open your dashboards in the browser. Local only; the database is opened read-only."""
+        os.environ["OTEL_SDK_DISABLED"] = "true"
+        for name in list(os.environ):
+            if name.startswith("OTEL_") and "EXPORTER" in name:
+                del os.environ[name]
         path = db or (demo_db_path() if demo else default_db_path())
         console = Console(soft_wrap=True, highlight=False)
         console.print(f"sherd web: {server.url(port)}", markup=False)

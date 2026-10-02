@@ -89,13 +89,13 @@ def _apply_setting(conn: duckdb.DuckDBPyConnection, statement: str) -> None:
     conn.execute(statement)
 
 
-def _connect_config() -> dict[str, str]:
+def _connect_config() -> dict[str, str | bool | int | float | list[str]]:
     """SESSION_SETUP as connection config, so a session starts with it even when locked.
 
     Every Store connects with this same config, which DuckDB requires of connections that
     share an instance.
     """
-    config: dict[str, str] = {}
+    config: dict[str, str | bool | int | float | list[str]] = {}
     for statement in SESSION_SETUP:
         match = _SET.fullmatch(statement.strip())
         if match:

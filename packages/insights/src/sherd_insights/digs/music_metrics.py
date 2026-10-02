@@ -203,11 +203,16 @@ class MusicDig:
                         if row["period"] == period
                     )
                 )
-                keep = {
-                    row["artist"]
-                    for period in periods
-                    for row in [r for r in candidates if r["period"] == period][: params.top_n]
-                }
+                # Share one artist axis so comparisons align and each side has <=8.
+                keep = set(
+                    sorted(
+                        artists,
+                        key=lambda artist: (
+                            -max((r["share"] or 0) for r in candidates if r["artist"] == artist),
+                            artist,
+                        ),
+                    )[: min(params.top_n, 8)]
+                )
                 values = [
                     {
                         "artist": artist,

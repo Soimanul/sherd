@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from itertools import pairwise
 from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -111,7 +112,13 @@ class SubscriptionDig:
             # the latest may have just one, so a recent price rise is visible immediately.
             if any(len(run) < 3 for run in runs[:-1]):
                 continue
-            typical = median(amount for _, amount in runs[-1]).quantize(Decimal("0.01"))
+            medians = [median(amount for _, amount in run) for run in runs]
+            if any(
+                abs(later - earlier) > earlier * Decimal("0.5")
+                for earlier, later in pairwise(medians)
+            ):
+                continue
+            typical = medians[-1].quantize(Decimal("0.01"))
             interval = float(candidate["interval_days"])
             period = "monthly" if interval <= 35 else "yearly"
             rows.append(
@@ -147,6 +154,11 @@ class SubscriptionDig:
         chart["data"]["values"] = charts.records(
             [{**row, "status": "active" if row["active"] else "inactive"} for row in rows]
         )
+        theme = charts.load_theme()
+        chart["encoding"]["color"]["scale"]["range"] = [
+            theme["range"]["category"][0],
+            theme["axis"]["labelColor"],  # tokens.css --color-text-3 (muted).
+        ]
         chart["encoding"]["x"]["title"] = f"Annual cost ({currency})"
         chart["encoding"]["y"]["title"] = None
         changed = sum(len(r["price_history"]) > 1 for r in rows)
@@ -161,7 +173,8 @@ class SubscriptionDig:
             Headline("Active annual subscription cost", float(annual), currency),
             "Annual cost at the latest stable price, with active and inactive subscriptions. "
             "At least three charges and a median cadence of 25-35 or 350-380 days; "
-            "amounts within 10% of each price run's median. Activity uses the range end "
+            "amounts within 10% of each price run's median; consecutive medians differ "
+            "by at most 50% of the earlier price. Activity uses the range end "
             "or today's local date for an open range, allowing 1.5 typical periods." + note,
         )
 

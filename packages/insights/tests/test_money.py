@@ -3,7 +3,7 @@
 import json
 import time
 from collections.abc import Iterator
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -483,11 +483,127 @@ def test_empty_database(store: Store, dig_id: str) -> None:
     assert got.text_summary
 
 
-def test_demo_category_colours_do_not_repeat(demo: Store) -> None:
-    got = compute(demo, "spend_by_category")
+def test_category_top_seven_other_human_labels_and_totals(store: Store) -> None:
+    insert(
+        store,
+        [
+            txn(
+                str(i),
+                "2024-01-01T12:00:00+00:00",
+                str(-100 + i),
+                category="food_delivery" if i == 0 else f"category_{i}",
+            )
+            for i in range(10)
+        ],
+    )
+    got = compute(store, "spend_by_category")
+    assert got.chart
+    values = got.chart["data"]["values"]
+    labels = {r["category"] for r in values}
+    assert labels == {"Food delivery", "Other"} | {f"Category {i}" for i in range(1, 7)}
+    assert next(r["spend"] for r in values if r["category"] == "Other") == 276
+    assert sum(r["spend"] for r in values) == 955
+    scale = got.chart["encoding"]["color"]["scale"]
+    assert set(scale["domain"]) == labels
+    assert len(set(scale["range"])) == 8
+    assert scale["range"] == charts.load_theme()["range"]["category"]
+
+
+@pytest.mark.parametrize(
+    ("interval", "accepted"),
+    [
+        (24, False),
+        (25, True),
+        (35, True),
+        (36, False),
+        (349, False),
+        (350, True),
+        (380, True),
+        (381, False),
+    ],
+)
+def test_subscription_cadence_window_edges(store: Store, interval: int, accepted: bool) -> None:
+    start = date(2020, 1, 1)
+    insert(
+        store,
+        [
+            txn(str(i), f"{start + timedelta(days=i * interval)}T12:00:00+00:00", "-10")
+            for i in range(3)
+        ],
+    )
+    got = compute(store, "subscriptions", DigParams(date_to=start + timedelta(days=interval * 2)))
+    assert bool(got.data.num_rows) is accepted
+
+
+@pytest.mark.parametrize(
+    ("interval", "elapsed", "active"),
+    [(30, 45, True), (30, 46, False), (350, 525, True), (350, 526, False)],
+)
+def test_subscription_active_observed_period_boundary(
+    store: Store, interval: int, elapsed: int, active: bool
+) -> None:
+    start = date(2020, 1, 1)
+    last = start + timedelta(days=interval * 2)
+    insert(
+        store,
+        [
+            txn(str(i), f"{start + timedelta(days=i * interval)}T12:00:00+00:00", "-10")
+            for i in range(3)
+        ],
+    )
+    got = compute(store, "subscriptions", DigParams(date_to=last + timedelta(days=elapsed)))
+    assert got.data.to_pylist()[0]["active"] is active
     assert got.chart
     scale = got.chart["encoding"]["color"]["scale"]
-    categories = set(got.data["category"].to_pylist())
-    assert set(scale["domain"]) == categories
-    assert len(set(scale["range"])) == len(categories)
-    assert scale["range"][:8] == charts.load_theme()["range"]["category"]
+    assert scale["domain"] == ["active", "inactive"]
+    assert scale["range"][1] == charts.load_theme()["axis"]["labelColor"] == "#aea49c"
+
+
+@pytest.mark.parametrize(
+    ("latest", "accepted"),
+    [("15", True), ("15.01", False), ("5", True), ("4.99", False), ("50", False)],
+)
+def test_subscription_consecutive_price_median_fifty_percent_limit(
+    store: Store, latest: str, accepted: bool
+) -> None:
+    insert(
+        store,
+        [
+            txn(str(i), f"2024-{i + 1:02}-01T12:00:00+00:00", "-" + amount)
+            for i, amount in enumerate(("10", "10", "10", latest))
+        ],
+    )
+    got = compute(store, "subscriptions", DigParams(date_to=date(2024, 4, 30)))
+    assert bool(got.data.num_rows) is accepted
+
+
+@pytest.mark.parametrize("kind", ["fee", "transfer"])
+def test_subscription_recurring_negative_fees_and_transfers(store: Store, kind: str) -> None:
+    insert(
+        store,
+        [txn(str(i), f"2024-{i + 1:02}-01T12:00:00+00:00", "-39.99", kind=kind) for i in range(3)],
+    )
+    got = compute(store, "subscriptions", DigParams(date_to=date(2024, 3, 31)))
+    assert got.data.to_pylist()[0]["annual_cost"] == Decimal("479.88")
+
+
+@pytest.mark.parametrize(
+    ("amounts", "accepted"),
+    [
+        (("9", "10", "11", "15"), True),
+        (("10", "10", "10", "15", "15", "15", "22.50"), True),
+        (("10", "10", "10", "15", "15", "15", "23"), False),
+    ],
+)
+def test_subscription_price_limit_uses_each_consecutive_run_median(
+    store: Store, amounts: tuple[str, ...], accepted: bool
+) -> None:
+    insert(
+        store,
+        [
+            txn(str(i), f"2024-{i + 1:02}-01T12:00:00+00:00", "-" + amount)
+            for i, amount in enumerate(amounts)
+        ],
+    )
+    got = compute(store, "subscriptions", DigParams(date_to=date(2024, 7, 31)))
+    assert bool(got.data.num_rows) is accepted

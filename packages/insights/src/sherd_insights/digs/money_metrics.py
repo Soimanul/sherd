@@ -1,6 +1,8 @@
 """Single-currency money digs; refunds reduce spend when they occur."""
 
 from dataclasses import dataclass, field
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import pyarrow as pa
@@ -112,14 +114,11 @@ def _monthly_bars(
         }
         enc["xOffset"] = {"field": series, "sort": order}
     if series == "category":
-        categories = sorted({str(row[series]) for row in data.to_pylist()})
-        ranges = charts.load_theme()["range"]
-        if len(categories) > len(ranges["category"]):
-            # Use the theme's auxiliary colours before cycling its eight categorical ones.
-            palette = list(
-                dict.fromkeys(ranges["category"] + ranges["diverging"] + ranges["ordinal"])
-            )
-            enc["color"]["scale"] = {"domain": categories, "range": palette[: len(categories)]}
+        categories = list(dict.fromkeys(str(row[series]) for row in data.to_pylist()))
+        enc["color"]["scale"] = {
+            "domain": categories,
+            "range": charts.load_theme()["range"]["category"][: len(categories)],
+        }
     return charts.apply_theme(
         {
             "data": {"values": charts.records(data)},
@@ -172,10 +171,26 @@ class MoneyDig:
             totals: dict[str, float] = {}
             for row in data.to_pylist():
                 totals[row["category"]] = totals.get(row["category"], 0) + float(row["spend"])
+            keep = set(sorted(totals, key=lambda category: (-totals[category], category))[:7])
+            grouped: dict[tuple[date, str], Decimal] = {}
+            for row in data.to_pylist():
+                label = (
+                    row["category"].replace("_", " ").capitalize()
+                    if row["category"] in keep
+                    else "Other"
+                )
+                key = (row["bucket"], label)
+                grouped[key] = grouped.get(key, Decimal("0")) + row["spend"]
+            display = pa.Table.from_pylist(
+                [
+                    {"bucket": bucket, "category": label, "spend": spend}
+                    for (bucket, label), spend in grouped.items()
+                ]
+            )
             winner = min(totals, key=lambda category: (-totals[category], category))
             return DigResult(
                 data,
-                _monthly_bars(data, "spend", "category", title=f"Spend ({currency})"),
+                _monthly_bars(display, "spend", "category", title=f"Spend ({currency})"),
                 f"Your biggest spending category was {winner}: {totals[winner]:.2f}." + note,
                 Headline(winner, round(totals[winner], 2), currency),
                 "Monthly net spend by category; refunds reduce their month's spend. "

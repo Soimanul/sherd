@@ -304,3 +304,27 @@ def test_empty_database(store: Store, dig_id: str) -> None:
     assert got.headline is None
     assert got.narrative
     assert got.text_summary
+
+
+@pytest.mark.parametrize(("top_n", "limit"), [(3, 3), (10, 8), (20, 8)])
+def test_seasonality_chart_artist_cap_per_side(store: Store, top_n: int, limit: int) -> None:
+    insert(
+        store,
+        [
+            play(
+                f"{month}-{i}",
+                f"2024-{month:02}-01T{hour}:00:00+00:00",
+                artist=f"Artist {month}-{i}",
+                minutes=20 - i,
+            )
+            for month, hour in [(1, "06"), (7, "23")]
+            for i in range(12)
+        ],
+    )
+    got = compute(store, "seasonality", DigParams(top_n=top_n))
+    assert got.chart
+    assert got.data.num_rows == 48
+    for panel in got.chart["vconcat"]:
+        values = panel["data"]["values"]
+        for period in panel["encoding"]["color"]["scale"]["domain"]:
+            assert len({r["artist"] for r in values if r["period"] == period}) == limit

@@ -40,7 +40,16 @@ def demo(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Store]:
 
 def assert_spec(spec: dict[str, Any]) -> None:
     assert spec["$schema"] == charts.SCHEMA
-    assert spec["mark"] in ("bar", "line", "rect")
+    layers = spec.get("layer", [spec])
+    for layer in layers:
+        mark = layer["mark"]
+        assert (mark["type"] if isinstance(mark, dict) else mark) in (
+            "bar",
+            "line",
+            "rect",
+            "point",
+            "text",
+        )
     assert "x" in spec["encoding"]
     assert "y" in spec["encoding"]
     assert isinstance(spec["data"]["values"], list)

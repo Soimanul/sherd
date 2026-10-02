@@ -24,7 +24,7 @@ STOPWORDS = frozenset(STOPWORD_TEXT.split())
 # Emoji bases, flags and keycaps; modifiers and joiners are consumed as part of a cluster.
 BASE = (
     r"(?:[\U0001F1E6-\U0001F1FF]{2}|[0-9#*]\ufe0f?\u20e3|"
-    r"[\U0001F300-\U0001FAFF\u2600-\u27BF\u2300-\u23FF])"
+    r"[\U0001F300-\U0001FAFF\u2600-\u27BF\u2300-\u23FF\u00A9\u00AE\u2122\u2B50\u2B1B\u2190-\u21FF])"
 )
 PART = BASE + r"[\ufe0f\ufe0e]?[\U0001F3FB-\U0001F3FF]?[\U000E0020-\U000E007E]*\U000E007F?"
 EMOJI = re.compile(PART + r"(?:\u200d" + PART + r")*")
@@ -38,15 +38,21 @@ class EmojiWords:
 
     def compute(self, store: Store, params: DigParams) -> DigResult:
         prefix, args = selection(params, direct=False)
-        source = store.query(
-            prefix
-            + """SELECT year(local_ts) AS year, text FROM selected
-            WHERE is_from_me AND kind = 'text' AND text IS NOT NULL ORDER BY ts, id""",
-            args,
-        )
         counters: dict[tuple[int, str], Counter[str]] = {}
         total: Counter[str] = Counter()
-        for batch in source.to_batches(max_chunksize=1024):
+        last_id = ""
+        while True:
+            # Store.query materialises Arrow tables: bound each read with keyset
+            # pagination instead of loading every message's text at once.
+            batch = store.query(
+                prefix
+                + """SELECT id, year(local_ts) AS year, text FROM selected
+                WHERE is_from_me AND kind = 'text' AND text IS NOT NULL AND id > ?
+                ORDER BY id LIMIT 1024""",
+                [*args, last_id],
+            )
+            if not batch.num_rows:
+                break
             for row in batch.to_pylist():
                 text = URLS.sub("", row["text"])
                 emoji = EMOJI.findall(text)
@@ -55,6 +61,7 @@ class EmojiWords:
                 counters.setdefault((row["year"], "word"), Counter()).update(
                     word for word in WORDS.findall(text.lower()) if word not in STOPWORDS
                 )
+            last_id = str(batch["id"][-1].as_py())
         rows = [
             {"year": year, "kind": kind, "token": token, "count": count}
             for (year, kind), counts in sorted(counters.items())

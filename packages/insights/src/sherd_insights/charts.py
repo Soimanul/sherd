@@ -6,6 +6,7 @@ from copy import deepcopy
 from datetime import date, datetime
 from decimal import Decimal
 from importlib.resources import files
+from math import ceil
 from typing import Any, cast
 
 import pyarrow as pa
@@ -61,17 +62,34 @@ def _spec(data: Records, mark: str, encoding: dict[str, Any]) -> dict[str, Any]:
 
 
 def bar(
-    data: Records, x: str, y: str, *, series: str | None = None, paired: bool = False
+    data: Records,
+    x: str,
+    y: str,
+    *,
+    series: str | None = None,
+    paired: bool = False,
+    series_order: Sequence[str] | None = None,
 ) -> dict[str, Any]:
+    """Horizontal bars keep every categorical label readable."""
     enc: dict[str, Any] = {
-        "x": {"field": x, "type": "nominal"},
-        "y": {"field": y, "type": "quantitative"},
+        "y": {
+            "field": x,
+            "type": "nominal",
+            "sort": None,
+            "axis": {"labelOverlap": False, "labelLimit": 240},
+        },
+        "x": {"field": y, "type": "quantitative"},
     }
     if series:
         enc["color"] = {"field": series, "type": "nominal"}
+        if series_order:
+            enc["color"]["scale"] = {"domain": list(series_order)}
         if paired:
-            enc["xOffset"] = {"field": series}
-    return _spec(data, "bar", enc)
+            enc["yOffset"] = {"field": series, "sort": list(series_order) if series_order else None}
+    spec = _spec(data, "bar", enc)
+    categories = len({row[x] for row in spec["data"]["values"]})
+    spec["height"] = max(240, categories * (40 if paired else 28))
+    return spec
 
 
 def line(data: Records, x: str, y: str, *, series: str | None = None) -> dict[str, Any]:
@@ -97,15 +115,53 @@ def heatmap(data: Records, x: str, y: str, value: str) -> dict[str, Any]:
 
 
 def bump(data: Records, x: str, rank: str, series: str) -> dict[str, Any]:
-    return _spec(
-        data,
-        "line",
+    values = records(data)
+    # Separate runs prevent lines bridging years outside the top contacts.
+    runs: list[dict[str, Any]] = []
+    ends: list[dict[str, Any]] = []
+    contacts = list(dict.fromkeys(row[series] for row in values))
+    for contact in contacts:
+        points = sorted((row for row in values if row[series] == contact), key=lambda row: row[x])
+        run = 0
+        previous: Any = None
+        for point in points:
+            if previous is not None and point[x] != previous + 1:
+                run += 1
+            runs.append({**point, "__run": f"{contact}:{run}"})
+            previous = point[x]
+        ends.append(points[-1])
+    ranks = list(range(1, max((ceil(row[rank]) for row in values), default=1) + 1))
+    return apply_theme(
         {
-            "x": {"field": x, "type": "ordinal"},
-            "y": {"field": rank, "type": "quantitative", "scale": {"reverse": True, "zero": False}},
-            "color": {"field": series, "type": "nominal"},
-            "order": {"field": x},
-        },
+            "data": {"values": values},
+            "width": 480,
+            "height": 240,
+            "padding": {"left": 4, "top": 4, "bottom": 4, "right": 180},
+            "encoding": {
+                "x": {"field": x, "type": "ordinal", "title": None},
+                "y": {"field": rank, "type": "ordinal", "scale": {"domain": ranks}},
+                "color": {
+                    "field": series,
+                    "type": "nominal",
+                    "legend": None,
+                    "scale": {"domain": contacts},
+                },
+                "tooltip": [{"field": series}, {"field": x}, {"field": rank}],
+            },
+            "layer": [
+                {
+                    "data": {"values": runs},
+                    "mark": "line",
+                    "encoding": {"detail": {"field": "__run"}, "order": {"field": x}},
+                },
+                {"mark": "point"},
+                {
+                    "data": {"values": ends},
+                    "mark": {"type": "text", "style": "label", "align": "left", "dx": 10},
+                    "encoding": {"text": {"field": series}},
+                },
+            ],
+        }
     )
 
 

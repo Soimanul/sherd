@@ -16,7 +16,7 @@ def selection(params: DigParams, *, direct: bool = True) -> tuple[str, list[obje
     if params.granularity not in ("day", "week", "month", "year"):
         raise ValueError("unknown granularity")
     sql = """WITH local AS (
-        SELECT *, coalesce(contact_id, chat_name) AS contact, timezone(?, ts) AS local_ts
+        SELECT *, coalesce(contact_id, chat_name, 'Unknown') AS contact, timezone(?, ts) AS local_ts
         FROM messages WHERE kind IN ('text','media')
     ), selected AS (
         SELECT * FROM local WHERE (?::DATE IS NULL OR local_ts::DATE >= ?::DATE)
@@ -97,7 +97,7 @@ class MessageDig:
             )
             data = store.query(
                 ranked_sql + "SELECT * FROM ranked WHERE rank <= ? ORDER BY year, rank",
-                [*args, params.top_n],
+                [*args, min(params.top_n, 5)],
             )
             if not data.num_rows:
                 return empty(data)
@@ -117,8 +117,14 @@ class MessageDig:
             return result(
                 data,
                 charts.bump(data, "year", "rank", "contact"),
-                Headline("Biggest rise", winner),
-                f"{winner} rose {rise} places between their first and last years with messages.",
+                Headline("Biggest rise", winner)
+                if rise > 0
+                else Headline("Top contact", str(data["contact"][0].as_py())),
+                (
+                    f"{winner} rose {rise} places between their first and last years with messages."
+                    if rise > 0
+                    else "No contact moved up between their first and last years with messages."
+                ),
                 "Yearly contact ranks, with rank one at the top.",
             )
         if metric == "response_times":
@@ -160,7 +166,14 @@ class MessageDig:
             )
             return result(
                 data,
-                charts.bar(data, "contact", "minutes", series="side", paired=True),
+                charts.bar(
+                    data,
+                    "contact",
+                    "minutes",
+                    series="side",
+                    paired=True,
+                    series_order=["you", "them"],
+                ),
                 headline,
                 narrative,
                 "Median reply minutes for you and each contact; gaps over 24 hours are excluded.",
@@ -193,7 +206,7 @@ class MessageDig:
             ]
             return result(
                 data,
-                charts.bar(values, "contact", "share", series="side"),
+                charts.bar(values, "contact", "share", series="side", series_order=["you", "them"]),
                 Headline("Conversations you started", round(share * 100, 1), "%"),
                 f"You started {share:.0%} of conversations after at least six hours of silence.",
                 "Share of conversations started by you and by each contact.",

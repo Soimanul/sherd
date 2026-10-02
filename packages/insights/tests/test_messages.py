@@ -1,8 +1,10 @@
+from collections.abc import Sequence
 from datetime import date
 
+import pyarrow as pa
 import pytest
 from sherd_core import Store
-from sherd_insights import DigParams, DigResult
+from sherd_insights import DigParams, DigResult, charts
 from sherd_insights.registry import discover
 
 from .conftest import insert, message
@@ -206,3 +208,134 @@ def test_words_without_emoji_and_no_own_replies(store: Store) -> None:
     got = compute(store, "response_times")
     assert got.headline
     assert got.headline.value == "No replies"
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        "volume_by_contact",
+        "top_contacts_by_year",
+        "response_times",
+        "conversation_starters",
+        "streaks_silences",
+    ],
+)
+def test_null_contact_retained_as_unknown(store: Store, metric: str) -> None:
+    insert(
+        store,
+        [
+            message("unknown-1", "2024-01-01T00:00:00+00:00", chat_name=None, me=False),
+            message("unknown-2", "2024-01-01T00:01:00+00:00", chat_name=None),
+        ],
+    )
+    got = compute(store, metric)
+    assert got.data.num_rows > 0
+    assert set(got.data["contact"].to_pylist()) == {"Unknown"}
+    assert got.chart
+    assert {row["contact"] for row in got.chart["data"]["values"]} == {"Unknown"}
+
+
+@pytest.mark.parametrize(("top_n", "expected"), [(1, 1), (3, 3), (10, 5)])
+def test_yearly_rank_limit_and_no_zero_rise(store: Store, top_n: int, expected: int) -> None:
+    insert(
+        store,
+        [message(str(i), "2024-01-01T00:00:00+00:00", contact=f"Contact {i}") for i in range(8)],
+    )
+    got = compute(store, "top_contacts_by_year", DigParams(top_n=top_n))
+    assert got.data.num_rows == expected
+    assert got.headline
+    assert got.headline.label == "Top contact"
+    assert "rose" not in got.narrative
+    assert got.chart
+    assert got.chart["encoding"]["y"]["scale"]["domain"] == list(range(1, expected + 1))
+
+
+def test_bump_runs_points_and_last_present_labels() -> None:
+    values = [
+        {"year": 2022, "contact": "Contact A", "rank": 1},
+        {"year": 2023, "contact": "Contact B", "rank": 1},
+        {"year": 2024, "contact": "Contact A", "rank": 2},
+        {"year": 2025, "contact": "Contact A", "rank": 1},
+    ]
+    chart = charts.bump(values, "year", "rank", "contact")
+    line, points, labels = chart["layer"]
+    runs = line["data"]["values"]
+    a = [row for row in runs if row["contact"] == "Contact A"]
+    assert a[0]["__run"] != a[1]["__run"] == a[2]["__run"]
+    assert points["mark"] == "point"
+    assert chart["data"]["values"] == values  # includes the single-year contact
+    assert labels["data"]["values"] == [values[-1], values[1]]
+    assert chart["encoding"]["color"]["legend"] is None
+    assert chart["encoding"]["y"]["scale"]["domain"] == [1, 2]
+
+
+@pytest.mark.parametrize(
+    ("metric", "value"),
+    [
+        ("response_times", "minutes"),
+        ("conversation_starters", "share"),
+        ("streaks_silences", "days"),
+    ],
+)
+def test_horizontal_contacts_and_consistent_side_colours(
+    store: Store, metric: str, value: str
+) -> None:
+    insert(
+        store,
+        [
+            message("1", "2024-01-01T00:00:00+00:00", me=False),
+            message("2", "2024-01-01T00:01:00+00:00"),
+            message("3", "2024-01-01T00:02:00+00:00", me=False),
+        ],
+    )
+    got = compute(store, metric)
+    assert got.chart
+    enc = got.chart["encoding"]
+    assert enc["y"]["field"] == "contact"
+    assert enc["y"]["axis"]["labelOverlap"] is False
+    assert enc["x"] == {"field": value, "type": "quantitative"}
+    if metric != "streaks_silences":
+        assert enc["color"]["scale"]["domain"] == ["you", "them"]
+    if metric == "response_times":
+        assert enc["yOffset"]["field"] == "side"
+        assert enc["yOffset"]["sort"] == ["you", "them"]
+
+
+@pytest.mark.parametrize(
+    "token", ["©️", "®️", "™", "⭐", "⬛", "↔️", "⇿", "❤️", "🇷🇴", "1️⃣", "#️⃣", "👨‍👩‍👧", "👍🏽"]
+)
+def test_additional_emoji_clusters(store: Store, token: str) -> None:
+    insert(store, [message("emoji", "2024-01-01T00:00:00+00:00", text=token)])
+    assert compute(store, "emoji_words").data.to_pylist() == [
+        {"year": 2024, "kind": "emoji", "token": token, "count": 1}
+    ]
+
+
+def test_emoji_counts_across_bounded_reads(store: Store, monkeypatch: pytest.MonkeyPatch) -> None:
+    insert(
+        store,
+        [
+            message(str(i), f"{2023 + i % 2}-01-01T00:00:00+00:00", text="synthetic ⭐")
+            for i in range(2050)
+        ],
+    )
+    query = store.query
+    sizes: list[int] = []
+
+    def bounded(sql: str, params: Sequence[object] = ()) -> pa.Table:
+        table = query(sql, params)
+        sizes.append(table.num_rows)
+        assert table.num_rows <= 1024
+        return table
+
+    monkeypatch.setattr(store, "query", bounded)
+    got = compute(store, "emoji_words")
+    assert sizes == [1024, 1024, 2, 0]
+    assert got.data.to_pylist() == [
+        {"year": year, "kind": kind, "token": token, "count": 1025}
+        for year in (2023, 2024)
+        for kind, token in (("emoji", "⭐"), ("word", "synthetic"))
+    ]
+    assert got.headline
+    assert got.headline.value == "⭐"
+    assert "2,050" in got.narrative

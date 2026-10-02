@@ -819,12 +819,14 @@ version = "0.0.0"
 source = { editable = "packages/connectors" }
 dependencies = [
     { name = "ijson" },
+    { name = "pyyaml" },
     { name = "sherd-core" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "ijson", specifier = ">=3.4" },
+    { name = "pyyaml", specifier = ">=6" },
     { name = "sherd-core", editable = "packages/core" },
 ]
 

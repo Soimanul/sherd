@@ -1,0 +1,34 @@
+id: revolut
+display_name: Revolut
+detect:
+  required_headers: [Type, Product, Started Date, Completed Date, Description, Amount, Fee, Currency, State, Balance]
+csv:
+  decimal: '.'
+ts:
+  column: Completed Date
+  fallback_column: Started Date
+  format: '%Y-%m-%d %H:%M:%S'
+amount:
+  column: Amount
+  fee: Fee
+currency:
+  column: Currency
+description: Description
+balance: Balance
+account: 'revolut:{Product}:{Currency}'
+counterparty:
+  regex: '^(?:To |Transfer from |Payment from )(?P<name>.+)$'
+kind:
+  column: Type
+  map:
+    CARD_PAYMENT: card
+    TRANSFER: transfer
+    TOPUP: topup
+    EXCHANGE: exchange
+    FEE: fee
+    CARD_REFUND: refund
+    REFUND: refund
+  default: other
+include:
+  column: State
+  allowed: [COMPLETED]

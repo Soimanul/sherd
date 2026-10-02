@@ -1,0 +1,4 @@
+Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
+CARD_PAYMENT,Current,2024-02-15 10:00:00,2024-02-15 10:00:00,Example February,-20,0,RON,COMPLETED,1000
+CARD_PAYMENT,Current,2024-02-15 10:00:00,2024-02-15 10:00:00,Example February,-20,0,RON,COMPLETED,1000
+CARD_PAYMENT,Current,2024-03-15 10:00:00,2024-03-15 10:00:00,Example March,-30,0,RON,COMPLETED,1000

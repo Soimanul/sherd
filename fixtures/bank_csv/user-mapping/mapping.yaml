@@ -1,0 +1,19 @@
+id: user_example
+display_name: Fictional user bank
+detect:
+  required_headers: [When, Memo, Value, Unit, Owner, Party]
+ts:
+  column: When
+  format: '%Y-%m-%d'
+amount:
+  column: Value
+  fee: Charge
+  sign: invert
+currency:
+  column: Unit
+description: Memo
+account: 'user:{Owner}'
+counterparty:
+  column: Party
+kind:
+  default: transfer

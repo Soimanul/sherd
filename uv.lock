@@ -804,11 +804,15 @@ name = "sherd-insights"
 version = "0.0.0"
 source = { editable = "packages/insights" }
 dependencies = [
+    { name = "pyarrow" },
     { name = "sherd-core" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "sherd-core", editable = "packages/core" }]
+requires-dist = [
+    { name = "pyarrow", specifier = ">=19" },
+    { name = "sherd-core", editable = "packages/core" },
+]
 
 [[package]]
 name = "sherd-mcp"

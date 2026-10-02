@@ -2,8 +2,10 @@
 
 import re
 import shlex
+import shutil
 from enum import StrEnum
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Annotated
 
 import duckdb
@@ -81,6 +83,8 @@ def register(app: typer.Typer) -> None:
             path = db or (demo_db_path() if demo else default_db_path())
             if not path.is_file():
                 raise ValueError("No database yet. Run `sherd demo` or `sherd dig PATH`.")
+            if out.exists() and not out.is_dir():
+                raise ValueError("Output path is a file. Choose a directory with --out DIR.")
             targets = [out / f"{name}.{fmt.value}" for name in names]
             for target in targets:
                 if target.exists() and not force:
@@ -88,12 +92,37 @@ def register(app: typer.Typer) -> None:
             with Store.open(path, read_only=True) as store:
                 data = insight.compute(store, DigParams(tz=local_zone())).data if insight else None
                 out.mkdir(parents=True, exist_ok=True)
-                for name, target in zip(names, targets, strict=True):
-                    if data is not None:
-                        write_data(data, target, fmt)
-                        count = data.num_rows
-                    else:
-                        count = store.export(f'SELECT * FROM "{name}"', [], target, fmt.value)
+                counts: list[int] = []
+                with TemporaryDirectory(prefix=".sherd-export-", dir=out) as staging:
+                    staged = [Path(staging) / target.name for target in targets]
+                    for name, temporary in zip(names, staged, strict=True):
+                        if data is not None:
+                            write_data(data, temporary, fmt)
+                            count = data.num_rows
+                        else:
+                            count = store.export(
+                                f'SELECT * FROM "{name}"', [], temporary, fmt.value
+                            )
+                        counts.append(count)
+                    backups: dict[Path, Path] = {}
+                    for index, target in enumerate(targets):
+                        if target.exists():
+                            backup = Path(staging) / f"backup-{index}"
+                            shutil.copy2(target, backup)
+                            backups[target] = backup
+                    published: list[Path] = []
+                    try:
+                        for temporary, target in zip(staged, targets, strict=True):
+                            temporary.replace(target)
+                            published.append(target)
+                    except OSError:
+                        for target in reversed(published):
+                            if target in backups:
+                                backups[target].replace(target)
+                            else:
+                                target.unlink()
+                        raise
+                for target, count in zip(targets, counts, strict=True):
                     typer.echo(f"{target}: {count} rows")
             first = str(targets[0])
             reader = "read_parquet" if fmt == Format.parquet else "read_csv_auto"
@@ -102,6 +131,11 @@ def register(app: typer.Typer) -> None:
             typer.echo(f"Open: duckdb -c {shlex.quote(open_sql)}")
             python_reader = "read_parquet" if fmt == Format.parquet else "read_csv"
             typer.echo(f"Python/Jupyter: import duckdb; duckdb.{python_reader}({first!r}).df()")
-        except (OSError, ValueError, StoreError, duckdb.Error, pa.ArrowException) as error:
+        except OSError:
+            typer.echo(
+                "Cannot write exports. Choose a writable directory with --out DIR.", err=True
+            )
+            raise typer.Exit(1) from None
+        except (ValueError, StoreError, duckdb.Error, pa.ArrowException) as error:
             typer.echo(" ".join(str(error).splitlines()), err=True)
             raise typer.Exit(1) from None

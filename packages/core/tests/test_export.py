@@ -19,12 +19,14 @@ def test_export_read_only_params_and_quoted_path(
     before = path.read_bytes()
     target = tmp_path / f"quoted'file.{fmt}"
     with Store.open(path, read_only=True) as store:
-        assert store.export("SELECT ? AS value;", ["synthetic' value"], target, fmt) == 1
+        assert (
+            store.export("SELECT ? AS value;", ['synthetic, "quoted"\nnext line'], target, fmt) == 1
+        )
     assert path.read_bytes() == before
     with duckdb.connect() as conn:
         reader = "read_csv_auto" if fmt == "csv" else "read_parquet"
         assert conn.execute(f"SELECT value FROM {reader}(?)", [str(target)]).fetchone() == (
-            "synthetic' value",
+            'synthetic, "quoted"\nnext line',
         )
 
 

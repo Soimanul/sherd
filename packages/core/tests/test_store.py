@@ -367,6 +367,25 @@ def test_unsandboxed_store_can_read_files(db_path: Path, tmp_path: Path) -> None
         assert store.query(f"SELECT * FROM read_csv('{csv}')").to_pylist() == [{"a": 1}]
 
 
+@pytest.mark.parametrize("second_sandboxed", [False, True])
+def test_stores_open_while_a_sandboxed_store_is_open(
+    db_path: Path, make_message: MessageFactory, second_sandboxed: bool
+) -> None:
+    # DuckDB shares one instance per file in a process; the sandbox locks its configuration.
+    with Store.open(db_path) as store:
+        store.upsert(new_import(store), "whatsapp", [make_message(1)])
+    with Store.open(db_path, read_only=True, sandboxed=True) as sandboxed:
+        with Store.open(db_path, read_only=True, sandboxed=second_sandboxed) as other:
+            assert other.table_counts()["messages"] == 1
+            assert sandboxed.table_counts()["messages"] == 1
+            # The session zone still comes from SESSION_SETUP, which can no longer be SET.
+            tz = "SELECT current_setting('TimeZone') AS tz"
+            assert other.query(tz).to_pylist() == [{"tz": "UTC"}]
+            with pytest.raises(duckdb.Error):
+                other._conn.execute("SET threads = 1")
+        assert sandboxed.query("SELECT count(*) AS n FROM messages").to_pylist() == [{"n": 1}]
+
+
 def test_interrupt_cancels_running_query(db_path: Path) -> None:
     Store.open(db_path).close()
     with Store.open(db_path, read_only=True, sandboxed=True) as store:

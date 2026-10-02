@@ -71,6 +71,38 @@ def _arrow_type(duckdb_type: str) -> pa.DataType:
     return _ARROW_TYPES[duckdb_type]
 
 
+_SET = re.compile(r"SET\s+(\w+)\s*=\s*'?([^']*)'?", re.IGNORECASE)
+
+
+def _apply_setting(conn: duckdb.DuckDBPyConnection, statement: str) -> None:
+    """Run `SET name = value` unless the setting already has that value.
+
+    Another connection to the same file may have locked the shared instance's configuration
+    (a sandboxed store); re-applying an unchanged value must not fail this open.
+    """
+    match = _SET.fullmatch(statement.strip())
+    if match:
+        name, value = match.groups()
+        current = conn.execute("SELECT current_setting(?)", [name]).fetchone()
+        if current is not None and str(current[0]).lower() == value.lower():
+            return
+    conn.execute(statement)
+
+
+def _connect_config() -> dict[str, str]:
+    """SESSION_SETUP as connection config, so a session starts with it even when locked.
+
+    Every Store connects with this same config, which DuckDB requires of connections that
+    share an instance.
+    """
+    config: dict[str, str] = {}
+    for statement in SESSION_SETUP:
+        match = _SET.fullmatch(statement.strip())
+        if match:
+            config[match[1]] = match[2]
+    return config
+
+
 class Store:
     """A sherd database. Create with `Store.open()`; not safe to share between threads."""
 
@@ -84,17 +116,19 @@ class Store:
         """Open the database at `path`; when writable, create it and migrate it if needed.
 
         `sandboxed=True` disables external access (file and HTTP table functions, ATTACH, COPY,
-        extensions) and locks the configuration, for running untrusted SQL.
+        extensions) and locks the configuration, for running untrusted SQL. DuckDB shares one
+        database instance per file within a process, so these settings are instance-wide: while
+        a sandboxed store is open, every store on that file in the process is sandboxed too.
         """
         path = Path(path)
         if read_only and not path.is_file():
             raise FileNotFoundError(f"no sherd database at {path}; import something first")
         if not read_only:
             path.parent.mkdir(parents=True, exist_ok=True)
-        conn = duckdb.connect(str(path), read_only=read_only)
+        conn = duckdb.connect(str(path), read_only=read_only, config=_connect_config())
         try:
             for statement in SESSION_SETUP:
-                conn.execute(statement)
+                _apply_setting(conn, statement)
             store = cls(conn, read_only=read_only)
             store._prepare_schema()
             store._load_layouts()
@@ -105,8 +139,8 @@ class Store:
                     [datetime.now(UTC)],
                 )
             if sandboxed:
-                conn.execute("SET enable_external_access = false")
-                conn.execute("SET lock_configuration = true")
+                _apply_setting(conn, "SET enable_external_access = false")
+                _apply_setting(conn, "SET lock_configuration = true")
         except BaseException:
             conn.close()
             raise

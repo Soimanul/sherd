@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="owl-mark-title">
+  <title id="owl-mark-title">sherd</title>
+  <style>
+    svg { color: #1f1c19; }
+    @media (prefers-color-scheme: dark) { svg { color: #f3ebe3; } }
+  </style>
+  <defs>
+    <mask id="owl-mark-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <!-- eyes, beak, and everything from the gap above the sherd down, are cut out of the body -->
+      <circle cx="23.4" cy="26" r="7.6" fill="#000"/>
+      <circle cx="40.6" cy="26" r="7.6" fill="#000"/>
+      <path d="M28.6 32.6H35.4L32 39.2Z" fill="#000"/>
+      <path d="M5.6 44.6Q32 36.2 58.4 44.6L64 64H0Z" fill="#000"/>
+    </mask>
+  </defs>
+  <g fill="currentColor">
+    <path mask="url(#owl-mark-cut)" d="M11.5 37 11.8 17.5 13.6 8.6 17.6 13 23 15.2Q32 12.2 41 15.2L46.4 13 50.4 8.6 52.2 17.5 52.5 37C52.5 50 43.5 58.5 32 58.5S11.5 50 11.5 37Z"/>
+    <circle cx="23.4" cy="26" r="3.6"/>
+    <circle cx="40.6" cy="26" r="3.6"/>
+    <path d="M8.2 46.6Q32 39 55.8 46.6L54.6 51.4 44.2 58.2 33.4 55.4 19.6 58.8 9.4 51.6Z"/>
+  </g>
+</svg>

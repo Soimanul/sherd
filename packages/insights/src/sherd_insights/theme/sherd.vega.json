@@ -1,0 +1,193 @@
+{
+  "background": "#1f1c19",
+  "padding": 4,
+  "font": "Fira Sans",
+  "view": {
+    "stroke": null,
+    "continuousWidth": 480,
+    "continuousHeight": 240
+  },
+  "title": {
+    "anchor": "start",
+    "color": "#f3ebe3",
+    "font": "Fira Sans",
+    "fontSize": 15,
+    "fontWeight": 600,
+    "offset": 14,
+    "subtitleColor": "#aea49c",
+    "subtitleFont": "Fira Sans",
+    "subtitleFontSize": 12.5,
+    "subtitleFontWeight": 400,
+    "subtitlePadding": 4
+  },
+  "axis": {
+    "domainColor": "#514c48",
+    "domainWidth": 1,
+    "gridColor": "#2e2a27",
+    "gridWidth": 1,
+    "labelColor": "#aea49c",
+    "labelFont": "Fira Sans",
+    "labelFontSize": 11.5,
+    "labelPadding": 6,
+    "tickColor": "#514c48",
+    "tickSize": 4,
+    "tickWidth": 1,
+    "titleColor": "#ccc2ba",
+    "titleFont": "Fira Sans",
+    "titleFontSize": 12,
+    "titleFontWeight": 500,
+    "titlePadding": 10
+  },
+  "axisX": {
+    "grid": false,
+    "labelAngle": 0,
+    "labelFlush": true,
+    "labelOverlap": "greedy"
+  },
+  "axisY": {
+    "domain": false,
+    "ticks": false
+  },
+  "axisQuantitative": {
+    "tickCount": 5
+  },
+  "axisBand": {
+    "grid": false,
+    "domain": false,
+    "ticks": false
+  },
+  "legend": {
+    "labelColor": "#ccc2ba",
+    "labelFont": "Fira Sans",
+    "labelFontSize": 12,
+    "labelLimit": 180,
+    "symbolSize": 72,
+    "symbolStrokeWidth": 0,
+    "symbolType": "circle",
+    "titleColor": "#ccc2ba",
+    "titleFont": "Fira Sans",
+    "titleFontSize": 12,
+    "titleFontWeight": 500,
+    "titlePadding": 8,
+    "rowPadding": 6,
+    "columnPadding": 16,
+    "gradientLength": 200,
+    "gradientThickness": 10,
+    "gradientStrokeWidth": 0
+  },
+  "header": {
+    "labelColor": "#ccc2ba",
+    "labelFont": "Fira Sans",
+    "labelFontSize": 12,
+    "titleColor": "#f3ebe3",
+    "titleFont": "Fira Sans",
+    "titleFontSize": 13,
+    "titleFontWeight": 600
+  },
+  "range": {
+    "category": ["#cf6139", "#0c9485", "#7563c0", "#b98918", "#aa487b", "#759b3d", "#407bc5", "#cc7580"],
+    "ordinal": ["#b94d23", "#cb632e", "#dc7b3e", "#ea9453", "#f6ae6e", "#fec890", "#ffe3c2"],
+    "ramp": ["#b94d23", "#cb632e", "#dc7b3e", "#ea9453", "#f6ae6e", "#fec890", "#ffe3c2"],
+    "heatmap": ["#b94d23", "#cb632e", "#dc7b3e", "#ea9453", "#f6ae6e", "#fec890", "#ffe3c2"],
+    "diverging": ["#d47452", "#ae6d56", "#896a5c", "#6d6864", "#607489", "#5c83af", "#6295d4"]
+  },
+  "scale": {
+    "bandPaddingInner": 0.32,
+    "bandPaddingOuter": 0.16,
+    "barBandPaddingInner": 0.32,
+    "rectBandPaddingInner": 0
+  },
+  "mark": {
+    "color": "#cf6139",
+    "tooltip": true
+  },
+  "bar": {
+    "color": "#cf6139",
+    "cornerRadiusEnd": 4
+  },
+  "arc": {
+    "stroke": "#1f1c19",
+    "strokeWidth": 2
+  },
+  "area": {
+    "color": "#cf6139",
+    "fillOpacity": 0.12,
+    "line": {
+      "strokeWidth": 2
+    }
+  },
+  "line": {
+    "color": "#cf6139",
+    "strokeWidth": 2,
+    "strokeCap": "round",
+    "strokeJoin": "round"
+  },
+  "point": {
+    "color": "#cf6139",
+    "filled": true,
+    "opacity": 1,
+    "size": 72,
+    "stroke": "#1f1c19",
+    "strokeWidth": 2
+  },
+  "circle": {
+    "color": "#cf6139",
+    "opacity": 1,
+    "size": 72,
+    "stroke": "#1f1c19",
+    "strokeWidth": 2
+  },
+  "rect": {
+    "stroke": "#1f1c19",
+    "strokeWidth": 2,
+    "cornerRadius": 2
+  },
+  "rule": {
+    "color": "#817a75",
+    "strokeWidth": 1
+  },
+  "tick": {
+    "color": "#cf6139",
+    "thickness": 2
+  },
+  "text": {
+    "color": "#ccc2ba",
+    "font": "Fira Sans",
+    "fontSize": 11.5
+  },
+  "style": {
+    "guide-label": {
+      "font": "Fira Sans",
+      "fill": "#aea49c"
+    },
+    "guide-title": {
+      "font": "Fira Sans",
+      "fill": "#ccc2ba"
+    },
+    "group-title": {
+      "font": "Fira Sans",
+      "fill": "#f3ebe3"
+    },
+    "group-subtitle": {
+      "font": "Fira Sans",
+      "fill": "#aea49c"
+    },
+    "label": {
+      "font": "Fira Sans",
+      "fill": "#ccc2ba",
+      "fontSize": 11.5
+    },
+    "value": {
+      "font": "Fira Sans",
+      "fill": "#f3ebe3",
+      "fontSize": 11.5,
+      "fontWeight": 500
+    }
+  },
+  "concat": {
+    "spacing": 24
+  },
+  "facet": {
+    "spacing": 16
+  }
+}

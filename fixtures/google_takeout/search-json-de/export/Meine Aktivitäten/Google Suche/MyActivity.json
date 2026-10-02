@@ -1,0 +1,27 @@
+[
+  {
+    "header": "Google Suche",
+    "title": "Gesucht nach: ignored",
+    "titleUrl": "https://example.com/search?q=Synthetic+stars",
+    "time": "2024-01-01T10:00:00.123456Z",
+    "products": [
+      "Search"
+    ]
+  },
+  {
+    "header": "Google Suche",
+    "title": "Gesucht nach: Fictional planets",
+    "time": "2024-01-02T10:00:00Z",
+    "products": [
+      "Search"
+    ]
+  },
+  {
+    "header": "Search",
+    "title": "Visited fictional page",
+    "time": "2024-01-02T11:00:00Z",
+    "products": [
+      "Search"
+    ]
+  }
+]

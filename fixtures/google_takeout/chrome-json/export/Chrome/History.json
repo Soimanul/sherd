@@ -1,0 +1,12 @@
+{
+  "Browser History": [
+    {
+      "title": "Synthetic stars",
+      "url": "https://example.com/stars",
+      "time_usec": 1704103200123456,
+      "page_transition": "LINK",
+      "client_id": "discard-this-device",
+      "favicon_url": "https://example.com/favicon"
+    }
+  ]
+}

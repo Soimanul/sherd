@@ -1,0 +1,17 @@
+[
+  {
+    "header": "YouTube",
+    "title": "Watched Synthetic stars",
+    "titleUrl": "https://example.com/watch?v=synthetic",
+    "subtitles": [
+      {
+        "name": "Fictional Studio",
+        "url": "https://example.com/channel/demo"
+      }
+    ],
+    "time": "2024-01-01T10:00:00Z",
+    "products": [
+      "YouTube"
+    ]
+  }
+]

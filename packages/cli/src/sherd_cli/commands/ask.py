@@ -99,7 +99,10 @@ def register(app: typer.Typer) -> None:
         json_output: Annotated[bool, typer.Option("--json")] = False,
         yes: Annotated[bool, typer.Option("--yes", help="Consent to a remote provider")] = False,
     ) -> None:
-        """Ask a question about your data; the SQL (or insight) used is always shown."""
+        """Ask a question about your data; the SQL (or insight) used is always shown.
+
+        Example: sherd ask "How many messages?" --demo --provider stub
+        """
         console = Console(soft_wrap=True)
         guard: AbstractContextManager[None] = offline_guard() if offline else nullcontext()
         try:
@@ -146,7 +149,11 @@ def register(app: typer.Typer) -> None:
             _print_result(console, result)
             _print_usage(console, result)
         except NoProviderError as error:
-            typer.echo(str(error), err=True)
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd ask --help"
+            message += "."
+            typer.echo(message, err=True)
             raise typer.Exit(1) from None
         except (
             AskError,
@@ -159,5 +166,13 @@ def register(app: typer.Typer) -> None:
             StoreError,
             duckdb.Error,
         ) as error:
-            Console(stderr=True).print(f"error: {error}", markup=False, highlight=False)
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd ask --help"
+            message += "."
+            Console(stderr=True, soft_wrap=True).print(
+                f"error: {message}",
+                markup=False,
+                highlight=False,
+            )
             raise typer.Exit(1) from None

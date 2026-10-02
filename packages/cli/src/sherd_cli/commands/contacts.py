@@ -16,7 +16,10 @@ from sherd_cli.commands.demo import demo_db_path
 
 
 def register(app: typer.Typer) -> None:
-    contacts = typer.Typer(invoke_without_command=True, help="List and resolve contacts.")
+    contacts = typer.Typer(
+        invoke_without_command=True,
+        help="List and resolve contacts.\n\nExample: sherd contacts --demo",
+    )
     app.add_typer(contacts, name="contacts")
 
     @contacts.callback()
@@ -26,7 +29,7 @@ def register(app: typer.Typer) -> None:
         demo: Annotated[bool, typer.Option(help="Use the demo database")] = False,
     ) -> None:
         if db is not None and demo:
-            Console(stderr=True).print("error: choose --db or --demo", markup=False)
+            Console(stderr=True, soft_wrap=True).print("error: choose --db or --demo", markup=False)
             raise typer.Exit(2)
         ctx.obj = db or (demo_db_path() if demo else default_db_path())
         if ctx.invoked_subcommand is None:
@@ -68,25 +71,41 @@ def register(app: typer.Typer) -> None:
                         f"{report.assigned_transactions} transfer assignments changed."
                     )
         except (OSError, ValueError, StoreError, duckdb.Error) as error:
-            Console(stderr=True).print(f"[red]error:[/] {escape(str(error))}")
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd contacts --help"
+            message += "."
+            Console(stderr=True, soft_wrap=True).print(f"[red]error:[/] {escape(message)}")
             raise typer.Exit(1) from None
 
     @contacts.command(name="resolve")
     def resolve_command(ctx: typer.Context) -> None:
-        """Resolve identities and assign imported facts."""
+        """Resolve identities and assign imported facts.
+
+        Example: sherd contacts resolve
+        """
         execute(ctx, "resolve")
 
     @contacts.command()
     def proposals(ctx: typer.Context) -> None:
-        """Show possible matches requiring confirmation."""
+        """Show possible matches requiring confirmation.
+
+        Example: sherd contacts proposals
+        """
         execute(ctx, "proposals")
 
     @contacts.command()
     def merge(ctx: typer.Context, a: str, b: str) -> None:
-        """Confirm a match between two contact ids or identity keys."""
+        """Confirm a match between two contact ids or identity keys.
+
+        Example: sherd contacts merge ID_A ID_B
+        """
         execute(ctx, "merge", a, b)
 
     @contacts.command()
     def reject(ctx: typer.Context, a: str, b: str) -> None:
-        """Persistently reject a match between two contact ids or identity keys."""
+        """Persistently reject a match between two contact ids or identity keys.
+
+        Example: sherd contacts reject ID_A ID_B
+        """
         execute(ctx, "reject", a, b)

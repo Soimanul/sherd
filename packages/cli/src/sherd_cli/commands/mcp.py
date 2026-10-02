@@ -18,7 +18,10 @@ def register(app: typer.Typer) -> None:
         db: Annotated[Path | None, typer.Option(help="Database to query")] = None,
         demo: Annotated[bool, typer.Option(help="Use the database built by `sherd demo`")] = False,
     ) -> None:
-        """Run the read-only MCP server over stdio for AI clients."""
+        """Run the read-only MCP server over stdio for AI clients.
+
+        Example: sherd mcp --demo
+        """
         path = db or (demo_db_path() if demo else default_db_path())
         if not path.is_file():
             typer.echo("No database yet. Run `sherd demo` or `sherd dig PATH`.", err=True)

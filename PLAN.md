@@ -265,12 +265,13 @@ Row = Message | MediaPlay | Transaction | Event | Location
 # store.py — the only module that writes.
 class Store:
     @classmethod
-    def open(cls, path: Path, *, read_only: bool = False) -> "Store": ...   # creates + migrates when writable
+    def open(cls, path: Path, *, read_only: bool = False, sandboxed: bool = False) -> "Store": ...  # creates + migrates when writable; sandboxed = no external access, locked config
     def begin_import(self, connector: str, connector_version: str, path_hash: str, tz: str) -> str: ...
     def upsert(self, import_id: str, source: str, rows: Iterable[Row], batch_size: int = 5000) -> UpsertStats: ...
     def finish_import(self, import_id: str, status: Literal["succeeded", "failed"]) -> UpsertStats: ...  # returns the ledger
     def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table: ...  # parametrised; reads only (see below)
     def table_counts(self) -> dict[str, int]: ...
+    def interrupt(self) -> None: ...                                         # cancel the running query (from another thread)
     def close(self) -> None: ...
 
 @dataclass(frozen=True)

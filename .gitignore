@@ -1,0 +1,26 @@
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Rust
+target/
+
+# sherd data — never commit real data or databases
+*.duckdb
+*.duckdb.wal
+.sherd/
+sherd-private/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

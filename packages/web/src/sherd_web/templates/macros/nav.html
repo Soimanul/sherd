@@ -1,0 +1,14 @@
+{#- Primary navigation: one entry per v1 page (deps.NAV), current page marked. -#}
+{% from "macros/icons.html" import icon %}
+
+{% macro nav(path, counts) -%}
+<nav class="nav" aria-label="Main">
+  {%- for href, label, icon_name, table in NAV %}
+  {%- set count = counts.get(table, 0) if table else 0 %}
+  <a class="nav-item" href="{{ href }}"{% if is_current(path, href) %} aria-current="page"{% endif %}>
+    {{- icon(icon_name) }}<span class="nav-label">{{ label }}</span>
+    {%- if count %}<span class="nav-count" title="{{ count | number }} rows">{{ count | compact }}</span>{% endif -%}
+  </a>
+  {%- endfor %}
+</nav>
+{%- endmacro %}

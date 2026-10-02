@@ -1,0 +1,175 @@
+{#- Shared components. Every page imports these; styles are in static/app.css.
+    Nothing here may carry an inline style or script: the CSP forbids both. -#}
+{% from "macros/icons.html" import icon %}
+
+{#- The page title block. `caller` (optional) renders actions on the right. -#}
+{% macro page_header(title, lede=None, id="page-title") -%}
+<header class="page-header">
+  <div class="page-header-text">
+    <h1 id="{{ id }}">{{ title }}</h1>
+    {%- if lede %}
+    <p class="page-lede">{{ lede }}</p>
+    {%- endif %}
+  </div>
+  {%- if caller %}
+  <div class="page-actions">{{ caller() }}</div>
+  {%- endif %}
+</header>
+{%- endmacro %}
+
+{#- An excavation photo scale: ten 1 cm segments, with a label on each side. -#}
+{% macro scale(left, right=None) -%}
+<div class="scale">
+  <div class="scale-bar" aria-hidden="true">{% for _ in range(10) %}<span></span>{% endfor %}</div>
+  <span class="scale-label">{{ left }}</span>
+  <div class="scale-rule" aria-hidden="true"></div>
+  {%- if right %}
+  <span class="scale-label">{{ right }}</span>
+  {%- endif %}
+</div>
+{%- endmacro %}
+
+{#- A section with a heading; the body is the caller. -#}
+{% macro section(title, id, note=None) -%}
+<section class="section" aria-labelledby="{{ id }}">
+  <div class="section-head">
+    <h2 id="{{ id }}">{{ title }}</h2>
+    {%- if note %}
+    <p>{{ note }}</p>
+    {%- endif %}
+  </div>
+  {{ caller() }}
+</section>
+{%- endmacro %}
+
+{#- Headline -> tile. `card` is a sherd_web.app.Card whose result has a headline. -#}
+{% macro stat_tile(card) -%}
+{%- set h = card.result.headline -%}
+<dl class="tile">
+  <dt class="stat-label">{{ h.label }}</dt>
+  <dd class="stat-value num">{{ h.value | number }}
+    {%- if h.unit %}<span class="stat-unit{{ ' stat-unit-tight' if h.unit == '%' }}">{{ h.unit }}</span>{% endif -%}
+  </dd>
+  {%- if h.delta is not none %}
+  <dd class="delta {{ 'delta-up' if h.delta > 0 else 'delta-down' if h.delta < 0 else '' }}">
+    {%- if h.delta > 0 %}{{ icon("i-up") }}{% elif h.delta < 0 %}{{ icon("i-down") }}{% endif -%}
+    <span class="num">{{ "+" if h.delta > 0 else "" }}{{ h.delta | number }}{% if h.unit %} {{ h.unit }}{% endif %}</span>
+    <span class="sr-only">compared with the previous period</span>
+  </dd>
+  {%- endif %}
+  <dd class="tile-source">{{ card.title }}</dd>
+</dl>
+{%- endmacro %}
+
+{#- A row of tiles, ruled like a finds register. -#}
+{% macro ledger(cards, label) -%}
+<div class="ledger" role="group" aria-label="{{ label }}">
+  {%- for c in cards %}
+  {{ stat_tile(c) }}
+  {%- endfor %}
+</div>
+{%- endmacro %}
+
+{#- One dig result: title, narrative, chart, visible text summary, data table.
+    The Vega-Lite spec (theme inside) goes in a JSON block that app.js renders. -#}
+{% macro chart_card(card, demo=False, wide=False, heading="h3") -%}
+<figure class="card chart-card{{ ' chart-card-wide' if wide }}" aria-labelledby="{{ card.id }}-title">
+  <div class="chart-head">
+    <{{ heading }} class="card-title" id="{{ card.id }}-title">{{ card.title }}</{{ heading }}>
+    {%- if demo %}
+    <span class="tag tag-demo">{{ t("common.demo_label") }}</span>
+    {%- endif %}
+  </div>
+  <p class="chart-narrative">{{ card.result.narrative }}</p>
+  {%- if card.spec is not none %}
+  <div class="chart" data-chart="{{ card.id }}-spec" role="img"
+       aria-labelledby="{{ card.id }}-title" aria-describedby="{{ card.id }}-summary"></div>
+  <script type="application/json" id="{{ card.id }}-spec">{{ card.spec | tojson }}</script>
+  {%- endif %}
+  <figcaption class="chart-summary" id="{{ card.id }}-summary">
+    <span class="sr-only">{{ t("common.chart_summary_label") }}: </span>{{ card.result.text_summary }}
+  </figcaption>
+  {%- if card.columns %}
+  <details class="chart-table">
+    <summary>{{ icon("i-chevron") }}{{ t("common.view_table") }}
+      <span class="chart-table-count num">{{ t("common.rows_one") if card.total_rows == 1 else t("common.rows", count=card.total_rows | number) }}</span>
+    </summary>
+    <div class="chart-table-scroll" role="region" aria-label="{{ card.title }}, data" tabindex="0">
+      <table class="table">
+        <thead>
+          <tr>{% for name, numeric in card.columns %}<th scope="col"{% if numeric %} class="r"{% endif %}>{{ name }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {%- for row in card.rows %}
+          <tr>{% for value in row %}{% set column = card.columns[loop.index0] %}<td{% if column[1] %} class="r"{% endif %}>{{ value | cell(column[0]) }}</td>{% endfor %}</tr>
+          {%- endfor %}
+        </tbody>
+      </table>
+    </div>
+    {%- if card.total_rows > card.rows | length %}
+    <p class="chart-table-note">First {{ card.rows | length | number }} of {{ card.total_rows | number }} rows.</p>
+    {%- endif %}
+  </details>
+  {%- endif %}
+</figure>
+{%- endmacro %}
+
+{#- The sherd owl, full colour; it blinks once on hover. -#}
+{% macro owl(size=160) -%}
+<svg class="owl" viewBox="0 0 64 64" width="{{ size }}" height="{{ size }}" role="img" aria-label="{{ t('product.owl_alt') }}">
+  <defs><mask id="owl-cut-{{ size }}" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64"><rect width="64" height="64" fill="#fff"/><path d="M5.6 44.6Q32 36.2 58.4 44.6L64 64H0Z" fill="#000"/></mask></defs>
+  <g mask="url(#owl-cut-{{ size }})"><path fill="#c9b8a6" d="M11.5 37 11.8 17.5 13.6 8.6 17.6 13 23 15.2Q32 12.2 41 15.2L46.4 13 50.4 8.6 52.2 17.5 52.5 37C52.5 50 43.5 58.5 32 58.5S11.5 50 11.5 37Z"/><path fill="#a8937e" d="M11.5 31C14.2 37.6 20.6 41.6 32 41.6S49.8 37.6 52.5 31V44H11.5Z"/></g>
+  <path fill="#e9ddcf" d="M32 19.8C28.6 16.6 24.6 15.4 21 16.2 15.3 17.5 13.4 23.8 15.6 29.4 17.4 34 22.5 36.8 27.6 35.6 29.6 35.1 31 34.2 32 33 33 34.2 34.4 35.1 36.4 35.6 41.5 36.8 46.6 34 48.4 29.4 50.6 23.8 48.7 17.5 43 16.2 39.4 15.4 35.4 16.6 32 19.8Z"/>
+  <g class="owl-eyes"><circle cx="23.4" cy="26" r="7" fill="#1f1c19"/><circle cx="40.6" cy="26" r="7" fill="#1f1c19"/><circle cx="23.4" cy="26" r="4.2" fill="#f5c076"/><circle cx="40.6" cy="26" r="4.2" fill="#f5c076"/><circle cx="23.4" cy="26" r="2.2" fill="#1f1c19"/><circle cx="40.6" cy="26" r="2.2" fill="#1f1c19"/><circle cx="22.2" cy="24.6" r="0.9" fill="#f3ebe3"/><circle cx="39.4" cy="24.6" r="0.9" fill="#f3ebe3"/></g>
+  <path fill="#3a322d" d="M29.2 32.4H34.8L32 38Z"/>
+  <path fill="#cd6b44" d="M8.2 46.6Q32 39 55.8 46.6L54.6 51.4 44.2 58.2 33.4 55.4 19.6 58.8 9.4 51.6Z"/>
+  <path fill="#ea9453" d="M8.2 46.6Q32 39 55.8 46.6L55.3 48.6Q32 41.4 8.7 48.6Z"/>
+  <path fill="none" stroke="#9d4b28" stroke-width="1.2" stroke-linecap="round" d="M12.4 51.4Q32 45.2 51.6 51.4"/>
+  <g fill="#3a322d"><rect x="20.4" y="42.2" width="1.8" height="4" rx="0.9" transform="rotate(-8 21.3 44.2)"/><rect x="23.2" y="41.6" width="1.8" height="4.2" rx="0.9"/><rect x="26" y="41.2" width="1.8" height="4" rx="0.9" transform="rotate(8 26.9 43.2)"/><rect x="36.2" y="41.2" width="1.8" height="4" rx="0.9" transform="rotate(-8 37.1 43.2)"/><rect x="39" y="41.6" width="1.8" height="4.2" rx="0.9"/><rect x="41.8" y="42.2" width="1.8" height="4" rx="0.9" transform="rotate(8 42.7 44.2)"/></g>
+</svg>
+{%- endmacro %}
+
+{#- An empty state from copy.yaml `empty.<key>`. `caller` (optional) renders the actions;
+    without one, nothing is offered. size="sm" is the compact in-page variant. -#}
+{% macro empty_state(key, values={}, size="lg", heading="h2") -%}
+{%- set base = "empty." ~ key -%}
+<div class="empty{{ ' empty-sm' if size == 'sm' }}">
+  {%- if size != "sm" %}
+  {{ owl(160) }}
+  {%- endif %}
+  <div class="empty-text">
+    <{{ heading }} class="empty-title">{{ t(base ~ ".title", **values) }}</{{ heading }}>
+    <p class="empty-body">{{ t(base ~ ".body", **values) }}</p>
+    {%- if caller %}
+    {{ caller() }}
+    {%- endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{#- A shell command the user can copy. -#}
+{% macro command(id, text, label="Copy command") -%}
+<div class="command" x-data="copyable">
+  <code class="command-text" id="{{ id }}"><span class="command-prompt" aria-hidden="true">$ </span>{{ text }}</code>
+  <button class="btn btn-ghost btn-sm" type="button" data-copy-target="{{ id }}"
+          data-label="{{ label }}" data-done="{{ t('common.copied') }}" x-on:click="copy">
+    {{ icon("i-copy") }}<span x-text="label">{{ label }}</span>
+  </button>
+</div>
+{%- endmacro %}
+
+{#- Callout. kind: success | warning | danger | info. Pass role="alert" or "status"
+    only when the notice appears after the page has loaded. -#}
+{% macro notice(kind, icon_name="i-info", role=None) -%}
+<div class="notice notice-{{ kind }}"{% if role %} role="{{ role }}"{% endif %}>
+  {{ icon(icon_name) }}<div>{{ caller() }}</div>
+</div>
+{%- endmacro %}
+
+{#- The "0 bytes sent" badge; Settings (WP-15) owns the full counter. -#}
+{% macro privacy_badge(bytes_sent=0) -%}
+<a class="privacy-badge" href="/settings" title="{{ t('privacy.badge_title') }}">
+  {{ icon("i-shield") }}
+  {%- if bytes_sent == 0 %}{{ t("privacy.counter_zero") }}{% else %}<span class="num">{{ bytes_sent | number }}</span> bytes {{ t("privacy.counter_label") }}{% endif -%}
+</a>
+{%- endmacro %}

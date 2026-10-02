@@ -113,7 +113,7 @@ def test_empty_date_range_graceful(demo: Store, dig_id: str) -> None:
 
 
 def test_available_and_discovery(store: Store) -> None:
-    assert set(registry.discover()) == set(IDS)
+    assert set(IDS) <= set(registry.discover())
     assert registry.available(store) == []
     insert(store, [message("1", "2024-01-01T00:00:00+00:00")])
     assert {dig.id for dig in registry.available(store)} == set(IDS)

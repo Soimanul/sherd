@@ -116,7 +116,10 @@ def test_available_and_discovery(store: Store) -> None:
     assert set(IDS) <= set(registry.discover())
     assert registry.available(store) == []
     insert(store, [message("1", "2024-01-01T00:00:00+00:00")])
-    assert {dig.id for dig in registry.available(store)} == set(IDS)
+    assert {dig.id for dig in registry.available(store)} == set(IDS) | {
+        "cross.life_timeline",
+        "trends.yoy",
+    }
 
 
 def test_plugin_and_duplicate_ids(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -177,3 +180,16 @@ def test_available_ledger_and_missing_table(store: Store, monkeypatch: pytest.Mo
     monkeypatch.setattr(registry, "discover", lambda: {present.id: present, missing.id: missing})
     assert registry.available(store) == [present]
     assert store.table_counts()["messages"] == 1
+
+
+def test_available_empty_requirements_need_fact_rows(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cross = messages_metrics.MessageDig("plugin.cross", "Cross", [])
+    ledger = messages_metrics.MessageDig("plugin.ledger", "Ledger", ["imports"])
+    monkeypatch.setattr(registry, "discover", lambda: {d.id: d for d in [cross, ledger]})
+    assert registry.available(store) == []
+    store.begin_import("synthetic", "1", "synthetic", "UTC")
+    assert registry.available(store) == [ledger]
+    insert(store, [message("availability", "2024-01-01T00:00:00+00:00")])
+    assert registry.available(store) == [cross, ledger]

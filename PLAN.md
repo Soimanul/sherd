@@ -272,6 +272,7 @@ class Store:
     def finish_import(self, import_id: str, status: Literal["succeeded", "failed"]) -> UpsertStats: ...  # returns the ledger
     def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table: ...  # parametrised; reads only (see below)
     def table_counts(self) -> dict[str, int]: ...
+    def export(self, sql: str, params: Sequence[object], path: Path, fmt: Literal["csv", "parquet"]) -> int: ...  # COPY a read to a file (WP-16)
     def interrupt(self) -> None: ...                                         # cancel the running query (from another thread)
     def close(self) -> None: ...
 
@@ -358,7 +359,7 @@ class DigResult:
 class Dig(Protocol):
     id: str                             # 'messages.volume_by_contact'
     title: str
-    requires: list[str]                 # tables that must have rows, e.g. ['messages']
+    requires: list[str]                 # tables that must have rows, e.g. ['messages']; [] = any fact table has rows
     def compute(self, store: Store, params: DigParams) -> DigResult: ...
 ```
 

@@ -10,5 +10,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command()
     def version() -> None:
-        """Print the installed version.\n\n        Example: sherd version"""
+        """Print the installed version.
+
+        Example: sherd version"""
         typer.echo(f"sherd {__version__}")

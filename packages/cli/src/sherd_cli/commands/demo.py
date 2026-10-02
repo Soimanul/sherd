@@ -58,9 +58,12 @@ def register(app: typer.Typer) -> None:
                     stale.unlink(missing_ok=True)
             seen, inserted, counts = build(path)
         except (OSError, ValueError, StoreError, registry.RegistryError, duckdb.Error) as error:
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd demo --help"
+            message += "."
             Console(stderr=True, soft_wrap=True).print(
-                f"[red]error:[/] {escape(' '.join(str(error).splitlines()))}"
-                "; run sherd demo --help.",
+                f"[red]error:[/] {escape(message)}",
                 highlight=False,
             )
             raise typer.Exit(1) from None

@@ -112,8 +112,12 @@ def register(app: typer.Typer) -> None:
                 table.add_row(*(Text(str(row[name])) for name in computed.data.column_names))
             console.print(table)
         except (OSError, ValueError, ZoneInfoNotFoundError, StoreError, duckdb.Error) as error:
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd show --help"
+            message += "."
             Console(stderr=True, soft_wrap=True).print(
-                f"error: {' '.join(str(error).splitlines())}; run sherd show --help.",
+                f"error: {message}",
                 markup=False,
                 highlight=False,
             )

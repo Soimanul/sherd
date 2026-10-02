@@ -104,4 +104,47 @@ def test_unknown_dig_and_bad_path_are_one_line_with_next_step(tmp_path: Path) ->
         assert result.exit_code == 1
         assert len(result.stderr.splitlines()) == 1
         assert hint in result.stderr
+        assert ".;" not in result.stderr
+        assert "--help" not in result.stderr
         assert "Traceback" not in result.output
+
+
+@pytest.mark.parametrize("command", ["ask", "show", "demo", "dig", "contacts"])
+def test_error_suffix_is_a_sentence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    from sherd_core import Store
+
+    path = tmp_path / "db.duckdb"
+    with Store.open(path):
+        pass
+    if command == "dig":
+        import sherd_cli.commands.dig as module
+
+        monkeypatch.setattr(
+            module,
+            "dig_export",
+            lambda *args: (_ for _ in ()).throw(ValueError("Synthetic failure.")),
+        )
+        args = ["dig", "synthetic", "--db", str(path)]
+    elif command == "demo":
+        import sherd_cli.commands.demo as demo_module
+
+        monkeypatch.setattr(
+            demo_module,
+            "build",
+            lambda *args: (_ for _ in ()).throw(ValueError("Synthetic failure.")),
+        )
+        args = ["demo", "--db", str(path), "--force"]
+    else:
+        monkeypatch.setattr(
+            Store,
+            "open",
+            lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("Synthetic failure.")),
+        )
+        args = [command, *(["synthetic?"] if command == "ask" else []), "--db", str(path)]
+    if command == "ask":
+        args += ["--provider", "stub"]
+    result = CliRunner().invoke(create_app(), args)
+    assert result.exit_code == 1, result.output
+    assert result.stderr.strip() == f"error: Synthetic failure. Run sherd {command} --help."

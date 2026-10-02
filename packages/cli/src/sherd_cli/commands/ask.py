@@ -149,7 +149,11 @@ def register(app: typer.Typer) -> None:
             _print_result(console, result)
             _print_usage(console, result)
         except NoProviderError as error:
-            typer.echo(" ".join(str(error).splitlines()) + "; run sherd ask --help.", err=True)
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd ask --help"
+            message += "."
+            typer.echo(message, err=True)
             raise typer.Exit(1) from None
         except (
             AskError,
@@ -162,8 +166,12 @@ def register(app: typer.Typer) -> None:
             StoreError,
             duckdb.Error,
         ) as error:
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd ask --help"
+            message += "."
             Console(stderr=True, soft_wrap=True).print(
-                f"error: {' '.join(str(error).splitlines())}; run sherd ask --help.",
+                f"error: {message}",
                 markup=False,
                 highlight=False,
             )

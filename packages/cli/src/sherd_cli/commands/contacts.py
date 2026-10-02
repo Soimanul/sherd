@@ -71,10 +71,11 @@ def register(app: typer.Typer) -> None:
                         f"{report.assigned_transactions} transfer assignments changed."
                     )
         except (OSError, ValueError, StoreError, duckdb.Error) as error:
-            Console(stderr=True, soft_wrap=True).print(
-                f"[red]error:[/] {escape(' '.join(str(error).splitlines()))}"
-                "; run sherd contacts --help."
-            )
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd contacts --help"
+            message += "."
+            Console(stderr=True, soft_wrap=True).print(f"[red]error:[/] {escape(message)}")
             raise typer.Exit(1) from None
 
     @contacts.command(name="resolve")

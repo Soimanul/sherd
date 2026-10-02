@@ -222,18 +222,24 @@ def register(app: typer.Typer) -> None:
                 console,
             )
         except DigError as error:
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd dig --help"
+            message += "."
             Console(stderr=True, soft_wrap=True).print(
-                f"[red]error:[/] {escape(' '.join(str(error).splitlines()))}"
-                "; run sherd dig --help.",
+                f"[red]error:[/] {escape(message)}",
                 highlight=False,
             )
             raise typer.Exit(error.code) from None
         except (OSError, ValueError, StoreError, registry.RegistryError, duckdb.Error) as error:
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd dig --help"
+            message += "."
             if os.environ.get(DEBUG_ENV) == "1":
                 raise
             Console(stderr=True, soft_wrap=True).print(
-                f"[red]error:[/] {escape(' '.join(str(error).splitlines()))}"
-                "; run sherd dig --help.",
+                f"[red]error:[/] {escape(message)}",
                 highlight=False,
             )
             raise typer.Exit(1) from None

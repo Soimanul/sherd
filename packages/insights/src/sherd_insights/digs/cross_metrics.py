@@ -82,7 +82,8 @@ def _timeline(store: Store, params: DigParams) -> DigResult:
         ), buckets AS (
             SELECT date_trunc(?, day)::DATE AS bucket, stream,
                 sum(activity)::BIGINT AS activity FROM days GROUP BY bucket, stream
-        ) SELECT *, (bucket + CASE ? WHEN 'day' THEN INTERVAL 1 DAY
+        ) SELECT *, 100.0 * activity / max(activity) OVER (PARTITION BY stream)
+            AS activity_pct, (bucket + CASE ? WHEN 'day' THEN INTERVAL 1 DAY
             WHEN 'week' THEN INTERVAL 7 DAY WHEN 'month' THEN INTERVAL 1 MONTH
             ELSE INTERVAL 1 YEAR END)::DATE AS bucket_end
             FROM buckets CROSS JOIN busiest ORDER BY bucket, stream""",
@@ -97,13 +98,15 @@ def _timeline(store: Store, params: DigParams) -> DigResult:
     streams = sorted(totals, key=lambda stream: (-totals[stream], stream))[:8]
     # One band per stream; all bands share the same time scale, with explicit interval ends.
     chart = charts.heatmap(
-        [r for r in rows if r["stream"] in streams], "bucket", "stream", "activity"
+        [r for r in rows if r["stream"] in streams], "bucket", "stream", "activity_pct"
     )
     chart["encoding"]["x"] = {"field": "bucket", "type": "temporal", "title": "Local date"}
     chart["encoding"]["x2"] = {"field": "bucket_end"}
     chart["encoding"]["y"]["sort"] = streams
     chart["encoding"]["y"]["title"] = None
-    chart["encoding"]["color"]["title"] = "Activity count"
+    chart["encoding"]["color"]["title"] = "share of the stream's busiest period"
+    chart["encoding"]["color"]["scale"] = {"domain": [0, 100]}
+    chart["encoding"]["color"]["legend"] = {"orient": "bottom", "titleLimit": 360}
     chart["encoding"]["tooltip"] = [
         {"field": "bucket", "type": "temporal"},
         {"field": "stream"},

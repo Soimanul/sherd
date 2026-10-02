@@ -37,20 +37,13 @@ def test_yoy_two_real_digs_exact_deltas_local_year_and_no_recursion(
         {
             "dig_id": "music.listening_minutes",
             "label": "Listening time",
+            "dig_title": "Listening time",
+            "delta_unit": "%",
+            "skipped_digs": 1,
             "unit": "hours",
             "this_year": 1.0,
             "last_year": 2.0,
             "delta_pct": -50.0,
-            "year": 2024,
-            "previous_year": 2023,
-        },
-        {
-            "dig_id": "cross.life_timeline",
-            "label": "Life timeline",
-            "unit": "activities",
-            "this_year": 2.0,
-            "last_year": 3.0,
-            "delta_pct": pytest.approx(-100 / 3),
             "year": 2024,
             "previous_year": 2023,
         },
@@ -69,6 +62,8 @@ class StubDig:
     mode: Literal["numeric", "error", "empty", "string", "missing", "zero", "nan", "unit"]
     title: str = "Synthetic headline"
     requires: list[str] = field(default_factory=list)
+    unit: str = "count"
+    label: str = "Synthetic"
     calls: list[DigParams] = field(default_factory=list)
 
     def compute(self, store: Store, params: DigParams) -> DigResult:
@@ -88,7 +83,7 @@ class StubDig:
             value = "Synthetic label"
         if self.mode == "nan":
             value = float("nan")
-        headline = Headline("Synthetic", value, "count")
+        headline = Headline(self.label, value, self.unit)
         if self.mode == "unit" and params.date_from.year == 2023:
             headline = Headline("Synthetic", value, "other")
         return DigResult(
@@ -159,3 +154,42 @@ def test_yoy_empty_when_all_candidates_fail(store: Store, monkeypatch: pytest.Mo
     assert result.data.num_rows == 0
     assert result.chart is None
     assert result.headline is None
+
+
+def test_yoy_percentage_points_quantity_labels_and_correlation_exclusion(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    insert(store, [message("latest", "2025-01-01T00:00:00+00:00")])
+    rate = StubDig("synthetic.rate", "zero", unit="%", label="Discovery share")
+    quantity = StubDig("synthetic.quantity", "numeric", label="Listening hours")
+    correlations = [
+        StubDig(id, "numeric", unit="r")
+        for id in ("cross.spend_vs_listening", "cross.messages_vs_youtube", "synthetic.correlation")
+    ]
+    monkeypatch.setattr(trends, "available", lambda store: [rate, quantity, *correlations])
+    result = trends.YearOverYear().compute(store, DigParams())
+    rows = result.data.to_pylist()
+    assert [(r["label"], r["delta_pct"], r["delta_unit"]) for r in rows] == [
+        ("Listening hours", 100, "%"),
+        ("Discovery share", 20, "pp"),
+    ]
+    assert all(r["dig_title"] == "Synthetic headline" and r["skipped_digs"] == 3 for r in rows)
+    assert result.headline
+    assert result.headline.label == "Listening hours"
+    monkeypatch.setattr(trends, "available", lambda store: [rate])
+    result = trends.YearOverYear().compute(store, DigParams())
+    assert result.headline
+    assert result.headline.unit == "pp"
+    assert "+20.0 pp" in result.narrative
+
+
+def test_yoy_logs_only_dig_id_exception_class_and_counts_empty_skips(
+    store: Store, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    insert(store, [message("latest", "2025-01-01T00:00:00+00:00")])
+    monkeypatch.setattr(trends, "available", lambda store: [StubDig("synthetic.error", "error")])
+    result = trends.YearOverYear().compute(store, DigParams())
+    assert "Skipped dig synthetic.error (ValueError)" in caplog.text
+    assert "synthetic failure" not in caplog.text
+    assert result.data.schema.metadata == {b"skipped_digs": b"1"}
+    assert "Skipped 1 digs" in result.narrative

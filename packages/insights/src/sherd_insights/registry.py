@@ -33,6 +33,7 @@ def discover() -> dict[str, Dig]:
 def available(store: Store) -> list[Dig]:
     registered = discover()
     counts = store.table_counts()
+    has_facts = any(counts.values())
     # table_counts covers fact tables; plugins may also require derived tables or the ledger.
     extra = {table for dig in registered.values() for table in dig.requires} - counts.keys()
     for table in sorted(extra):
@@ -46,4 +47,8 @@ def available(store: Store) -> list[Dig]:
             counts[table] = int(
                 store.query(f'SELECT count(*) AS n FROM main."{quoted}"').to_pylist()[0]["n"]
             )
-    return [dig for dig in registered.values() if all(counts.get(t, 0) for t in dig.requires)]
+    return [
+        dig
+        for dig in registered.values()
+        if (all(counts.get(t, 0) for t in dig.requires) if dig.requires else has_facts)
+    ]

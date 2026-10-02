@@ -404,3 +404,30 @@ def test_empty_selected_range_and_missing_comparison_stream(store: Store, metric
     if metric != "soundtrack":
         missing = compute(store, metric)
         assert missing.data.num_rows == 0
+
+
+def test_timeline_normalizes_each_stream_and_preserves_locations_counts() -> None:
+    conn = duckdb.connect()
+    conn.execute("CREATE TABLE messages(ts TIMESTAMPTZ)")
+    conn.execute("CREATE TABLE locations(ts TIMESTAMPTZ)")
+    conn.execute("INSERT INTO messages SELECT TIMESTAMPTZ '2024-01-01' FROM range(100)")
+    conn.execute("INSERT INTO messages VALUES (TIMESTAMPTZ '2024-02-01')")
+    conn.execute(
+        "INSERT INTO locations VALUES (TIMESTAMPTZ '2024-01-01'), "
+        "(TIMESTAMPTZ '2024-02-01'), (TIMESTAMPTZ '2024-02-01')"
+    )
+    with Store(conn, read_only=True) as store:
+        result = compute(store, "life_timeline")
+    rows = result.data.to_pylist()
+    assert [(r["stream"], r["activity"], r["activity_pct"]) for r in rows] == [
+        ("locations", 1, 50),
+        ("messages", 100, 100),
+        ("locations", 2, 100),
+        ("messages", 1, 1),
+    ]
+    assert result.chart
+    color = result.chart["encoding"]["color"]
+    assert color["field"] == "activity_pct"
+    assert color["scale"]["domain"] == [0, 100]
+    assert color["title"] == "share of the stream's busiest period"
+    assert any(t["field"] == "activity" for t in result.chart["encoding"]["tooltip"])

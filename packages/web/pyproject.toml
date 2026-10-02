@@ -2,7 +2,10 @@
 name = "sherd-web"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ['sherd-core>=0.0.0', 'sherd-insights>=0.0.0', 'fastapi>=0.115', 'jinja2>=3.1', 'uvicorn>=0.34', 'pyyaml>=6']
+dependencies = ['sherd-core>=0.0.0', 'sherd-insights>=0.0.0', 'fastapi>=0.115', 'jinja2>=3.1', 'uvicorn>=0.34', 'pyyaml>=6',
+    'sherd-agent>=0.0.0',
+    'sherd-connectors>=0.0.0',
+]
 
 [build-system]
 requires = ["uv_build>=0.12"]
@@ -15,3 +18,4 @@ dev = ["httpx2>=2.13", "sherd-connectors>=0.0.0"]
 sherd-core = { workspace = true }
 sherd-insights = { workspace = true }
 sherd-connectors = { workspace = true }
+sherd-agent = { workspace = true }

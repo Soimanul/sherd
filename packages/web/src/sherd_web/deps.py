@@ -18,6 +18,7 @@ import yaml
 from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sherd_agent import privacy
 from sherd_core import Store
 
 PACKAGE = files("sherd_web")
@@ -50,15 +51,17 @@ def settings(request: Request) -> Settings:
 
 
 def open_store(settings: Annotated[Settings, Depends(settings)]) -> Generator[Store | None]:
-    """A read-only store for one request, or None when there is no database yet.
+    """A read-only, sandboxed store for one request, or None when there is no database yet.
 
     Opened per request so the app never holds DuckDB's file lock between requests,
-    which keeps `sherd dig` usable while the web UI is running.
+    which keeps `sherd dig` usable while the web UI is running. Pages never need external
+    access; sandboxing every store gives all connections in the process (Ask's included)
+    one configuration.
     """
     if not settings.db_path.is_file():
         yield None
         return
-    with Store.open(settings.db_path, read_only=True) as store:
+    with Store.open(settings.db_path, read_only=True, sandboxed=True) as store:
         yield store
 
 
@@ -188,3 +191,14 @@ def is_current(path: str, href: str) -> bool:
 
 
 templates.env.globals["is_current"] = is_current
+
+
+def privacy_bytes() -> int:
+    """Bytes sent to remote providers so far, for the nav badge; 0 when unreadable."""
+    try:
+        return privacy.remote_bytes_sent()
+    except (OSError, ValueError, AttributeError):
+        return 0
+
+
+templates.env.globals["privacy_bytes"] = privacy_bytes

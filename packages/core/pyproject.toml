@@ -2,8 +2,11 @@
 name = "sherd-core"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ['duckdb>=1', 'pydantic>=2', 'pyarrow>=19']
+dependencies = ['duckdb>=1', 'pydantic>=2', 'pyarrow>=19', 'pyyaml>=6']
 
 [build-system]
 requires = ["uv_build>=0.12"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = ["types-pyyaml>=6", "pyarrow-stubs>=19"]

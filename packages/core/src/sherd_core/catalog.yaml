@@ -1,0 +1,192 @@
+# Table and column descriptions of the canonical sherd schema (PLAN §4.2).
+# Read by the agent when it writes SQL and by the docs. Every table and column must be described;
+# a test derives the list from the live schema.
+schema_version: 1
+description: >-
+  sherd keeps one person's exported personal data (chats, listening history, bank transactions,
+  browsing and search history, location) in a single DuckDB database. The five fact tables
+  (messages, media_plays, transactions, events, locations) share the same provenance columns.
+  contacts is derived from them, imports logs every import run, schema_meta holds the schema
+  version.
+conventions:
+  - >-
+    Every timestamp is TIMESTAMPTZ stored in UTC and the session time zone is UTC. To group by
+    the owner's local day or hour, convert first, e.g. `ts AT TIME ZONE 'Europe/Bucharest'`;
+    imports.tz holds the zone each import used to read local times.
+  - >-
+    Enumerated columns are VARCHAR restricted by CHECK constraints to the values listed in their
+    description; compare them with plain string literals.
+  - >-
+    Money is DECIMAL(18,2) in the currency of the row's `currency` column. Negative amount means
+    money out (spent, sent, charged), positive means money in. Never add up amounts of different
+    currencies.
+  - >-
+    A fact row is unique per (source, source_row_id). Re-importing the same export adds nothing,
+    so counts never double up across imports.
+  - >-
+    People are identified per source by `sender_id` (messages) or `counterparty` (transactions).
+    `contact_id` links those to `contacts.id` once entity resolution has run and is NULL before
+    that; join through contacts to count one person across sources, and follow
+    `contacts.merged_into` when it is not NULL.
+  - >-
+    `meta` is JSON with connector-specific extras; do not rely on it for analysis.
+
+common_columns: &common
+  id: >-
+    Primary key: first 32 hex characters of sha256(source || chr(31) || source_row_id). Stable
+    across re-imports.
+  source: >-
+    Id of the connector that produced the row, e.g. 'whatsapp', 'spotify', 'google_takeout',
+    'bank_csv', 'shell_history'.
+  source_file: Path of the export file the row came from, relative to the export root, '/'-separated.
+  source_row_id: >-
+    Key chosen by the connector that identifies the record within its source; independent of file
+    names and export dates, so overlapping exports deduplicate.
+  import_id: Id of the import (imports.id) that first inserted this row.
+  imported_at: UTC time at which this row was first inserted.
+  meta: >-
+    JSON object with connector-specific extras that have no column, or NULL. Not stable across
+    connectors; avoid in analysis.
+
+tables:
+  messages:
+    description: >-
+      One row per chat message (WhatsApp and other messengers), including media, system notices
+      and deleted-message placeholders. Each row is one message in one chat.
+    columns:
+      <<: *common
+      chat_id: Connector-stable key of the chat (conversation) the message belongs to.
+      chat_name: Display name of the chat as exported (the other person's name or the group name); may be NULL.
+      chat_kind: >-
+        'direct' for a one-to-one chat, 'group' for a group chat.
+      sender_id: >-
+        Connector-local identity of the sender, prefixed with the source, e.g.
+        'whatsapp:+15550100' or 'whatsapp:name:Ana Pop'. NULL for system messages.
+      sender_name: Sender's display name as exported; NULL for system messages.
+      is_from_me: TRUE when the owner of the export sent the message.
+      contact_id: >-
+        contacts.id of the sender, filled by entity resolution; NULL until it has run and for
+        system messages.
+      ts: When the message was sent, UTC.
+      text: Message text; NULL for media without a caption and for deleted messages.
+      kind: >-
+        'text' (plain message), 'media' (attachment, optional caption in text), 'system' (chat
+        notice such as a member joining or encryption notice), 'deleted' (deleted-message
+        placeholder).
+      media_type: >-
+        Attachment type when kind = 'media': 'image', 'video', 'audio' (incl. voice notes),
+        'document', 'sticker', 'gif' or 'other'. NULL for messages without media.
+      reply_to_id: messages.id of the message this one replies to, when the export records it; otherwise NULL.
+
+  media_plays:
+    description: >-
+      One row per playback of a music track, podcast episode, video or audiobook (Spotify and
+      similar). Short or skipped plays are included; filter on ms_played to drop them.
+    columns:
+      <<: *common
+      ts: When the playback ended, UTC (Spotify's convention); the start is ts minus ms_played.
+      media_kind: >-
+        'track' (music), 'episode' (podcast episode), 'video', or 'audiobook'.
+      artist: Artist name for tracks, show or channel name for episodes and videos; may be NULL.
+      track: Track, episode, video or chapter title; may be NULL.
+      album: Album name for tracks; NULL otherwise.
+      uri: Platform URI of the item, e.g. 'spotify:track:...'; may be NULL.
+      ms_played: Milliseconds actually played (BIGINT). Divide by 60000.0 for minutes, 3600000.0 for hours.
+      platform: Device or client used for playback as exported; may be NULL.
+      shuffle: TRUE if shuffle mode was on; NULL when unknown.
+      skipped: TRUE if the user skipped to the next item; NULL when unknown.
+
+  transactions:
+    description: >-
+      One row per bank or card account movement (card payments, transfers, fees, top-ups,
+      currency exchanges, refunds) from bank CSV exports.
+    columns:
+      <<: *common
+      ts: When the transaction happened (or was booked, if that is all the export has), UTC.
+      amount: >-
+        Signed amount, DECIMAL(18,2), in `currency`. Negative = money out (payment, transfer
+        sent, fee); positive = money in (salary, transfer received, refund, top-up). Use
+        sum(-amount) FILTER (WHERE amount < 0) for spending.
+      currency: ISO 4217 code of amount and balance, e.g. 'EUR', 'USD', 'RON'.
+      merchant_raw: Merchant or description text exactly as exported; may be NULL.
+      merchant: >-
+        Normalised merchant name (cleaned of card numbers, locations and suffixes) for grouping
+        spend by merchant; may be NULL.
+      counterparty: For transfers, the other party's name as exported; NULL otherwise.
+      contact_id: >-
+        contacts.id of the counterparty, filled by entity resolution; NULL until it has run and
+        for non-transfers.
+      category: Spending category from the bank or the mapper, free text; may be NULL.
+      account: Account the movement belongs to (account name or masked number as exported).
+      balance: Account balance after the transaction, DECIMAL(18,2) in `currency`; NULL when not exported.
+      kind: >-
+        'card' (card payment), 'transfer' (bank transfer in or out), 'fee', 'topup' (account
+        top-up), 'exchange' (currency exchange leg), 'refund', or 'other'.
+
+  events:
+    description: >-
+      One row per timestamped activity that is not a message, play, transaction or location:
+      videos watched, searches, web pages visited, shell commands and similar.
+    columns:
+      <<: *common
+      ts: When the event happened, UTC.
+      kind: >-
+        Dotted namespace '<source>.<action>', e.g. 'youtube.watch', 'google.search',
+        'chrome.visit', 'shell.command'. Filter with kind = '...' or kind LIKE 'youtube.%'.
+      title: Human-readable title (video title, search query, page title, command); may be NULL.
+      url: URL related to the event; may be NULL.
+
+  locations:
+    description: >-
+      One row per location fix: single GPS pings, visits to a place, and movement segments.
+    columns:
+      <<: *common
+      ts: Time of the ping, or start of the visit or segment, UTC.
+      end_ts: End of the visit or segment, UTC; NULL for pings.
+      lat: Latitude in decimal degrees (WGS84), -90 to 90.
+      lon: Longitude in decimal degrees (WGS84), -180 to 180.
+      accuracy_m: Horizontal accuracy radius in metres; NULL when unknown.
+      place_name: Name of the visited place, when known; NULL otherwise.
+      kind: >-
+        'ping' (single position fix), 'visit' (stay at a place from ts to end_ts), 'segment'
+        (movement between places from ts to end_ts).
+
+  contacts:
+    description: >-
+      People merged across sources by entity resolution. Derived from messages and transactions,
+      so it has no provenance columns. messages.contact_id and transactions.contact_id point
+      here.
+    columns:
+      id: Primary key, uuid4 hex.
+      display_name: Preferred name to show for the person.
+      aliases: VARCHAR[] of other names the person appears under; use list_contains(aliases, '...').
+      identities: >-
+        VARCHAR[] of the per-source identities merged into this contact: messages.sender_id values
+        and transactions.counterparty values.
+      sources: VARCHAR[] of connector ids in which the person appears, e.g. ['whatsapp', 'bank_csv'].
+      merged_into: >-
+        contacts.id of the contact this one was merged into, or NULL if it is current. Rows with a
+        non-NULL merged_into are superseded.
+      created_at: When the contact was created, UTC.
+      updated_at: When the contact was last changed, UTC.
+
+  imports:
+    description: One row per import run of a connector over an export.
+    columns:
+      id: Primary key, uuid4 hex; referenced by import_id in the fact tables.
+      connector: Connector id that ran the import, e.g. 'whatsapp'.
+      connector_version: Version of the connector that ran the import.
+      path_hash: sha256 hex of the sorted (relative path, size) list of the export's files; equal hashes mean the same export.
+      tz: IANA time zone (e.g. 'Europe/Bucharest') used to read local times in that export.
+      started_at: When the import started, UTC.
+      finished_at: When the import finished, UTC; NULL while running.
+      rows_seen: Rows the connector produced (BIGINT).
+      rows_inserted: Rows that were new and inserted (BIGINT); 0 when re-importing the same export.
+      status: >-
+        'running' (in progress or interrupted), 'succeeded', or 'failed'.
+
+  schema_meta:
+    description: Key-value settings of the database itself.
+    columns:
+      key: Setting name; 'schema_version' holds the schema version.
+      value: Setting value as text, e.g. '1' for schema_version.

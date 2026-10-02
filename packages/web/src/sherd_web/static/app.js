@@ -36,11 +36,18 @@
     // label gutter); then keep the spec's own width and let the frame scroll sideways.
     const pad = spec.padding && typeof spec.padding === "object" ? spec.padding : {};
     const plot = el.clientWidth - (pad.left || 0) - (pad.right || 0);
-    if (plot >= MIN_PLOT_WIDTH) {
+    // "container" width only works for single and layered views; facets and concats
+    // keep their own width.
+    const enc = spec.encoding || {};
+    const composite = Boolean(
+      spec.facet || spec.repeat || spec.concat || spec.hconcat || spec.vconcat || enc.row || enc.column || enc.facet,
+    );
+    if (plot >= MIN_PLOT_WIDTH && !composite) {
       spec.width = "container";
       spec.autosize = { type: "fit-x", contains: "padding" };
     } else {
       el.classList.add("is-scroll");
+      el.tabIndex = 0; // a scrolling region must be reachable by keyboard
     }
     window
       .vegaEmbed(el, spec, {

@@ -7,7 +7,8 @@ description: >-
   browsing and search history, location) in a single DuckDB database. The five fact tables
   (messages, media_plays, transactions, events, locations) share the same provenance columns.
   contacts is derived from them, imports logs every import run, schema_meta holds the schema
-  version.
+  version. Store.query() is a mistake guard, not a security boundary; untrusted SQL must use
+  Store.open(path, read_only=True).
 conventions:
   - >-
     Every timestamp is TIMESTAMPTZ stored in UTC and the session time zone is UTC. To group by
@@ -176,7 +177,7 @@ tables:
       id: Primary key, uuid4 hex; referenced by import_id in the fact tables.
       connector: Connector id that ran the import, e.g. 'whatsapp'.
       connector_version: Version of the connector that ran the import.
-      path_hash: sha256 hex of the sorted (relative path, size) list of the export's files; equal hashes mean the same export.
+      path_hash: sha256 hex of the sorted (relative path, size) list of the export's files; this is a file-list and size fingerprint, not proof of identical contents.
       tz: IANA time zone (e.g. 'Europe/Bucharest') used to read local times in that export.
       started_at: When the import started, UTC.
       finished_at: When the import finished, UTC; NULL while running.

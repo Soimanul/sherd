@@ -94,6 +94,12 @@ class Store:
             store = cls(conn, read_only=read_only)
             store._prepare_schema()
             store._load_layouts()
+            if not read_only:
+                conn.execute(
+                    "UPDATE imports SET status = 'failed', finished_at = ?"
+                    " WHERE status = 'running'",
+                    [datetime.now(UTC)],
+                )
         except BaseException:
             conn.close()
             raise
@@ -136,20 +142,19 @@ class Store:
         logger.info("import %s started: connector=%s", import_id, connector)
         return import_id
 
-    def finish_import(
-        self, import_id: str, status: Literal["succeeded", "failed"], stats: UpsertStats
-    ) -> None:
-        """Close a running import with its final status and row counts."""
+    def finish_import(self, import_id: str, status: Literal["succeeded", "failed"]) -> UpsertStats:
+        """Close a running import and return its persisted row counts."""
         self._require_writable()
         if status not in ("succeeded", "failed"):
             raise ValueError(f"invalid import status: {status!r}")
         result = self._conn.execute(
-            "UPDATE imports SET finished_at = ?, rows_seen = ?, rows_inserted = ?, status = ?"
-            " WHERE id = ? AND status = 'running'",
-            [datetime.now(UTC), stats.seen, stats.inserted, status, import_id],
+            "UPDATE imports SET finished_at = ?, status = ?"
+            " WHERE id = ? AND status = 'running' RETURNING rows_seen, rows_inserted",
+            [datetime.now(UTC), status, import_id],
         ).fetchone()
-        if not result or result[0] != 1:
+        if result is None:
             raise StoreError(f"import {import_id} is not running")
+        stats = UpsertStats(int(result[0]), int(result[1]))
         logger.info(
             "import %s %s: %d rows seen, %d inserted",
             import_id,
@@ -157,6 +162,7 @@ class Store:
             stats.seen,
             stats.inserted,
         )
+        return stats
 
     # -- writes --------------------------------------------------------------------------------
 
@@ -178,6 +184,7 @@ class Store:
         self._require_running_import(import_id)
         params = {"source": source, "import_id": import_id, "imported_at": datetime.now(UTC)}
         buffers: dict[_Layout, dict[str, Row]] = {}
+        batch_seen: dict[_Layout, int] = {}
         seen = inserted = 0
         for row in rows:
             layout = self._layouts.get(type(row))
@@ -186,16 +193,20 @@ class Store:
             seen += 1
             buffer = buffers.setdefault(layout, {})
             buffer.setdefault(row_id(source, row.source_row_id), row)
-            if len(buffer) >= batch_size:
-                inserted += self._insert(layout, buffer, params)
+            batch_seen[layout] = batch_seen.get(layout, 0) + 1
+            if batch_seen[layout] >= batch_size:
+                inserted += self._insert(layout, buffer, params, batch_seen[layout])
                 buffer.clear()
+                batch_seen[layout] = 0
         for layout, buffer in buffers.items():
             if buffer:
-                inserted += self._insert(layout, buffer, params)
+                inserted += self._insert(layout, buffer, params, batch_seen[layout])
         logger.info("import %s: upserted %d rows, %d new", import_id, seen, inserted)
         return UpsertStats(seen=seen, inserted=inserted)
 
-    def _insert(self, layout: _Layout, buffer: dict[str, Row], params: dict[str, object]) -> int:
+    def _insert(
+        self, layout: _Layout, buffer: dict[str, Row], params: dict[str, object], seen: int
+    ) -> int:
         rows = buffer.values()
         columns: dict[str, list[object]] = {"id": list(buffer)}
         for name in layout.fields:
@@ -206,15 +217,31 @@ class Store:
         batch = pa.Table.from_pydict(columns, schema=layout.schema)
         self._conn.register(_BATCH_VIEW, batch)
         try:
-            result = self._conn.execute(layout.insert_sql, params).fetchone()
+            self._conn.begin()
+            try:
+                result = self._conn.execute(layout.insert_sql, params).fetchone()
+                inserted = int(result[0]) if result else 0
+                self._conn.execute(
+                    "UPDATE imports SET rows_seen = rows_seen + ?,"
+                    " rows_inserted = rows_inserted + ? WHERE id = ?",
+                    [seen, inserted, params["import_id"]],
+                )
+                self._conn.commit()
+            except BaseException:
+                self._conn.rollback()
+                raise
         finally:
             self._conn.unregister(_BATCH_VIEW)
-        return int(result[0]) if result else 0
+        return inserted
 
     # -- reads ---------------------------------------------------------------------------------
 
     def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table:
-        """Run one parametrised read statement (SELECT, WITH … SELECT, FROM …)."""
+        """Run one parametrised read statement (SELECT, WITH … SELECT, FROM …).
+
+        This is a mistake guard, not a security boundary; untrusted SQL must use
+        Store.open(path, read_only=True).
+        """
         statements = self._conn.extract_statements(sql)
         if len(statements) != 1:
             raise QueryNotAllowedError(f"expected one statement, got {len(statements)}")

@@ -114,10 +114,11 @@ def test_money_quantised_to_cents(raw: object, expected: str) -> None:
     assert str(row.balance) == expected
 
 
-@pytest.mark.parametrize("raw", ["NaN", "Infinity", "1e16", "-10000000000000000"])
-def test_money_must_fit_decimal_18_2(raw: str) -> None:
-    with pytest.raises(ValidationError, match="amount"):
-        build(Transaction, amount=raw)
+@pytest.mark.parametrize("field", ["amount", "balance"])
+@pytest.mark.parametrize("raw", ["NaN", "Infinity", "1e100", "1e16", "-10000000000000000"])
+def test_money_must_fit_decimal_18_2(field: str, raw: str) -> None:
+    with pytest.raises(ValidationError, match=field):
+        build(Transaction, **{field: raw})
 
 
 def test_rows_are_immutable() -> None:

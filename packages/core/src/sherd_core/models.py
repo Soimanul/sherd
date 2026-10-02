@@ -19,6 +19,8 @@ def _to_utc(value: datetime) -> datetime:
 
 
 def _to_money(value: Decimal) -> Decimal:
+    if not value.is_finite() or abs(value) >= _MONEY_LIMIT:
+        raise ValueError("amount does not fit DECIMAL(18,2)")
     quantised = value.quantize(_CENT, rounding=ROUND_HALF_EVEN)
     if abs(quantised) >= _MONEY_LIMIT:
         raise ValueError("amount does not fit DECIMAL(18,2)")

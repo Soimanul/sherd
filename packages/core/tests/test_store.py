@@ -168,15 +168,22 @@ def test_failed_upsert_keeps_written_batches_and_resumes(
     store: Store, make_message: MessageFactory
 ) -> None:
     def failing() -> Iterator[Message]:
-        yield from (make_message(i) for i in range(35))
+        yield from (make_message(i) for i in range(5))
         raise RuntimeError("parse error")
 
+    first = new_import(store)
     with pytest.raises(RuntimeError, match="parse error"):
-        store.upsert(new_import(store), "whatsapp", failing(), batch_size=10)
-    assert store.table_counts()["messages"] == 30
-
-    rerun = store.upsert(new_import(store), "whatsapp", (make_message(i) for i in range(50)))
-    assert rerun == UpsertStats(seen=50, inserted=20)
+        store.upsert(first, "whatsapp", failing(), batch_size=2)
+    persisted = store.table_counts()["messages"]
+    assert persisted == 4
+    assert store.finish_import(first, "failed") == UpsertStats(persisted, persisted)
+    second = new_import(store)
+    rerun = store.upsert(second, "whatsapp", (make_message(i) for i in range(5)))
+    assert rerun == UpsertStats(5, 1)
+    assert store.finish_import(second, "succeeded") == rerun
+    owners = import_ids(store)
+    assert {owners[f"m{i:06d}"] for i in range(4)} == {first}
+    assert owners["m000004"] == second
 
 
 def test_upsert_rejects_non_rows(store: Store) -> None:
@@ -195,8 +202,8 @@ def test_logs_carry_counts_not_content(
 ) -> None:
     caplog.set_level(logging.DEBUG, logger="sherd.core")
     import_id = new_import(store)
-    stats = store.upsert(import_id, "whatsapp", [make_message(1, text="secret-text-123")])
-    store.finish_import(import_id, "succeeded", stats)
+    store.upsert(import_id, "whatsapp", [make_message(1, text="secret-text-123")])
+    store.finish_import(import_id, "succeeded")
     assert import_id in caplog.text
     for content in ("secret-text-123", "Ana", "+15550100", "chat-1", "Chat with Ana"):
         assert content not in caplog.text
@@ -214,7 +221,7 @@ def test_import_lifecycle(store: Store, make_message: MessageFactory) -> None:
     assert (running["path_hash"], running["tz"]) == ("abc", "America/New_York")
 
     stats = store.upsert(import_id, "whatsapp", [make_message(1), make_message(1)])
-    store.finish_import(import_id, "succeeded", stats)
+    assert store.finish_import(import_id, "succeeded") == stats
     done = store.query("SELECT * FROM imports WHERE id = ?", [import_id]).to_pylist()[0]
     assert (done["status"], done["rows_seen"], done["rows_inserted"]) == ("succeeded", 2, 1)
     assert done["finished_at"] >= done["started_at"]
@@ -222,16 +229,16 @@ def test_import_lifecycle(store: Store, make_message: MessageFactory) -> None:
 
 def test_failed_import_is_recorded(store: Store) -> None:
     import_id = new_import(store)
-    store.finish_import(import_id, "failed", UpsertStats(0, 0))
+    store.finish_import(import_id, "failed")
     status = store.query("SELECT status FROM imports WHERE id = ?", [import_id])
     assert status.to_pylist() == [{"status": "failed"}]
 
 
 def test_finished_or_unknown_imports_cannot_be_used(store: Store) -> None:
     import_id = new_import(store)
-    store.finish_import(import_id, "succeeded", UpsertStats(0, 0))
+    store.finish_import(import_id, "succeeded")
     with pytest.raises(StoreError, match="not running"):
-        store.finish_import(import_id, "failed", UpsertStats(0, 0))
+        store.finish_import(import_id, "failed")
     with pytest.raises(StoreError, match="not running"):
         store.upsert(import_id, "whatsapp", [])
     with pytest.raises(StoreError, match="not running"):
@@ -242,7 +249,7 @@ def test_invalid_status_and_time_zone_rejected(store: Store) -> None:
     with pytest.raises(ValueError, match="time zone"):
         store.begin_import("whatsapp", "1", "h", "Mars/Olympus")
     with pytest.raises(ValueError, match="status"):
-        store.finish_import(new_import(store), "running", UpsertStats(0, 0))  # type: ignore[arg-type]  # deliberately invalid
+        store.finish_import(new_import(store), "running")  # type: ignore[arg-type]  # deliberately invalid
 
 
 # -- query -----------------------------------------------------------------------------------
@@ -312,7 +319,7 @@ def test_read_only_store_cannot_write(db_path: Path, make_message: MessageFactor
         with pytest.raises(ReadOnlyStoreError):
             store.upsert(import_id, "whatsapp", [make_message(2)])
         with pytest.raises(ReadOnlyStoreError):
-            store.finish_import(import_id, "succeeded", UpsertStats(1, 1))
+            store.finish_import(import_id, "succeeded")
         # The connection itself is read-only too, below the API checks.
         with pytest.raises(duckdb.InvalidInputException, match="read-only"):
             store._conn.execute("DELETE FROM messages")
@@ -405,3 +412,51 @@ def test_raw_import_status_check(raw: duckdb.DuckDBPyConnection) -> None:
             " status) VALUES ('i', 'c', '1', 'h', 'UTC', ?, 'done')",
             [TS],
         )
+
+
+def test_writable_reopen_fails_dangling_import(db_path: Path) -> None:
+    with Store.open(db_path) as store:
+        import_id = new_import(store)
+    with Store.open(db_path, read_only=True) as store:
+        assert store.query("SELECT status FROM imports").to_pylist() == [{"status": "running"}]
+    with Store.open(db_path) as store:
+        row = store.query("SELECT * FROM imports WHERE id = ?", [import_id]).to_pylist()[0]
+        assert row["status"] == "failed"
+        assert row["finished_at"] >= row["started_at"]
+
+
+def test_read_only_store_rejects_select_side_effects(db_path: Path) -> None:
+    with Store.open(db_path) as store:
+        store._conn.execute("CREATE SEQUENCE probe_seq")
+    with (
+        Store.open(db_path, read_only=True) as store,
+        pytest.raises(duckdb.InvalidInputException, match="read-only"),
+    ):
+        store.query("SELECT nextval('probe_seq')")
+
+
+def test_upsert_returns_ledger_delta(store: Store, make_message: MessageFactory) -> None:
+    import_id = new_import(store)
+    first = store.upsert(import_id, "whatsapp", [make_message(1)] * 3, batch_size=2)
+    second = store.upsert(import_id, "whatsapp", [make_message(1), make_message(2)])
+    assert first == UpsertStats(3, 1)
+    assert second == UpsertStats(2, 1)
+    assert store.finish_import(import_id, "succeeded") == UpsertStats(
+        first.seen + second.seen, first.inserted + second.inserted
+    )
+
+
+def test_read_only_checkpoint_leaves_file_and_data_unchanged(
+    db_path: Path, make_message: MessageFactory
+) -> None:
+    with Store.open(db_path) as store:
+        import_id = new_import(store)
+        store.upsert(import_id, "whatsapp", [make_message(1)])
+        store.finish_import(import_id, "succeeded")
+    before = db_path.read_bytes()
+    with Store.open(db_path, read_only=True) as store:
+        data = store.query("SELECT * FROM messages").to_pylist()
+        store.query("SELECT * FROM checkpoint()")
+        assert store.query("SELECT * FROM messages").to_pylist() == data
+        assert db_path.read_bytes() == before
+    assert db_path.read_bytes() == before

@@ -16,7 +16,10 @@ Connector id: `whatsapp`. Output table: `messages`.
 Android normally writes `WhatsApp Chat with <Name>.txt`. iOS writes `_chat.txt`,
 usually inside `WhatsApp Chat - <Name>.zip`. Archives may also contain media;
 only chat text is opened, with `zipfile`, without extracting anything to disk.
-Directory imports include nested text exports and zip files in sorted path order.
+Directory imports include nested text exports and zip files in sorted chat-path order.
+Detection walks paths lazily, sampling at most 64 KiB per candidate until a match;
+it does not sort media folders or stop after three unrelated text files. A negative
+directory probe still needs to visit every candidate, so cost scales with the directory.
 
 ## Supported text shapes
 
@@ -25,7 +28,7 @@ Directory imports include nested text exports and zip files in sorted path order
 - Continuations without a timestamp prefix join the previous text with `\n`.
 - English US: `M/D/YY`, twelve-hour clock; English GB: `DD/MM/YYYY`, 24-hour clock;
   Romanian: `DD.MM.YYYY`, 24-hour clock; German: `DD.MM.YY`, 24-hour clock.
-- AM/PM accepts uppercase/lowercase, `a.m.`/`p.m.`, ordinary spaces, U+00A0 and U+202F.
+- AM/PM accepts uppercase/lowercase, `a.m.`/`p.m.` and `a. m.`/`p. m.`, ordinary spaces, U+00A0 and U+202F.
   Two-digit years mean 20xx. Across valid timestamp prefixes in a file, first field
   greater than 12 means D/M; second greater than 12 means M/D. Otherwise twelve-hour
   clocks mean M/D and 24-hour clocks mean D/M. D/M wins conflicting hints; rows invalid
@@ -43,11 +46,11 @@ depends on the largest message and the current timestamp group, not export histo
 | Input | Canonical output |
 | --- | --- |
 | Android filename name; iOS archive name; otherwise first non-self sender | `chat_name`; whitespace-collapsed, NFC-normalized, casefolded name hashed with `whatsapp` → `chat_id` |
-| More than two distinct non-system sender identities, or group creation/membership/subject notice | `chat_kind='group'`; otherwise `direct` |
+| More than two distinct non-system participants (self aliases count once), or group creation/membership/subject notice | `chat_kind='group'`; otherwise `direct` |
 | Sender | `sender_name`; phone-looking values become `sender_id='whatsapp:+'` plus digits, otherwise `whatsapp:name:` plus the exported name |
 | Sender matching a self identity | `is_from_me=True`; phone punctuation is ignored for matching |
 | Local date/time | `ts`, localized with `ctx.tz`, then canonicalized to UTC; ambiguous times use `fold=0`, nonexistent times shift forward by the DST gap |
-| Body and continuation lines | `text`, `kind='text'` |
+| Body and continuation lines | `text`, `kind='text'`; empty bodies are NULL |
 | Omitted/attached media placeholder | `kind='media'`; `media_type` from explicit type or attachment extension; `text` is caption or NULL |
 | Deleted placeholder | `kind='deleted'`, `text=NULL` |
 | System body | `kind='system'`, `sender_id=NULL`, `sender_name=NULL`, `is_from_me=False`; the notice remains in `text` |
@@ -76,11 +79,17 @@ Deleted notices include the English "This message was deleted" and "You deleted 
 message", Romanian "Acest mesaj a fost șters" and "Ai șters acest mesaj", German
 "Diese Nachricht wurde gelöscht" and "Du hast diese Nachricht gelöscht", Spanish
 "Este mensaje fue eliminado", "Eliminaste este mensaje" and "Borraste este mensaje".
-System records cover encryption, group creation/membership/subject changes, missed
-calls and security-code changes. Timestamped senderless records are always system.
+Deleted phrases accept one optional trailing period in every supported language.
+System records cover encryption, group creation/membership/subject/icon/description
+changes, missed calls and security-code changes. Timestamped senderless records are
+always system. Sender-prefixed records are user messages unless the text begins with
+U+200E and the entire cleaned text matches a known system notice. The marker is checked
+before stripping controls; matching never searches sender names or arbitrary user prose.
+An empty `Sender:` is accepted like `Sender: `, retaining its sender and NULL text.
 
 Malformed timestamp records with a recognized prefix (invalid date/clock), or an
 empty sender, are skipped. One count-only warning is emitted after parse completes.
+A parse producing zero rows emits a count-only warning.
 Lines without a recognized timestamp are continuations; preamble lines are ignored.
 A continuation beginning with an entire valid export timestamp is indistinguishable
 from a new record. A timestamp embedded within prose remains text. Duplicate
@@ -115,13 +124,39 @@ with `SHERD_UPDATE_GOLDENS=1` and each resulting JSONL row was reviewed.
 Raw generator: `python -m sherd_connectors.whatsapp.synth_whatsapp PATH --locale en-US
 --bytes 52428800 --seed 4` (also `en-GB`, `ro-RO`, `de-DE`, and `--ios`).
 
-Negative detection exercises synthetic Spotify/shell/bank/Takeout shapes; this WP
-baseline has no other connector fixtures, and the cross-connector fixture test checks
-them when available at integration.
+Negative detection exercises synthetic Spotify/shell/bank/Takeout shapes and every
+other integrated connector fixture; it asserts that cross-connector candidates exist.
 
-Final verification: `scripts/check` passed all 442 tests with no skips (one existing
-network-guard warning). The targeted WhatsApp plus golden run passed 153 tests.
-Manual benchmark outside the gate: the final short-record generator wrote 524,288,147
-bytes (at least 500 MiB; first line 148 bytes), and `measure_streaming` parsed
-3,443,506 messages in 128.33 seconds at 68.58 MiB peak RSS, with `Europe/Bucharest`
-on macOS / Python 3.12.14. The temporary benchmark export was removed afterward.
+## Identity limitations
+
+`source_row_id` hashes the localized timestamp ISO string, as contracted. Importing
+the same export with a different timezone changes the interpreted instant and its row
+id; always reuse the export timezone. Unnamed chat ids instead hash the first record's
+UTC timestamp. These formulas deliberately remain unchanged in connector version 2.
+Loose iOS files use the first non-self sender as the name rather than extracting the
+subject from notices: `ios-ro-group` is named `Mira Example`, not `Luni de hârtie`.
+Starting a later export at a different participant can therefore change its chat id
+and prevent overlap deduplication. Removing the first record of an unnamed chat also
+changes its id. Prefer named Android files or named iOS archives for stable chat names.
+Self aliases count as one participant for group inference but retain separate exported
+sender ids; cross-source entity resolution owns sender identity unification.
+
+## Fix-round evidence
+
+| Review finding | Regression evidence |
+| --- | --- |
+| 1: user security-code prose loses sender | `test_review_user_phrases_keep_sender` |
+| 2: marked iOS notices and deletion periods | `test_review_marked_ios_notices`, `test_deleted_locales`, `ios-ro-group` golden |
+| 3: sender names ending in left/containing added | `test_review_user_phrases_keep_sender` |
+| 4: spaced AM/PM, zero-record warning | `test_review_spaced_ampm_is_new_record`, `test_review_zero_records_count_only_warning` |
+| 5: localized hash vs UTC unnamed hash risk | `test_review_localized_timestamp_hash_contract`, `test_unnamed_notes_to_self_identity`; formulas documented above |
+| 6: loose-iOS chat identity risk | `test_review_loose_ios_identity_depends_on_first_sender`; limitation documented above |
+| 7: empty sender-prefixed body | `test_review_empty_user_body` |
+| 8: eager directory discovery and three-file cutoff | `test_review_detection_after_three_nonchat_files`, `test_review_detection_stops_before_remaining_directory`, `test_detect_reads_only_first_64_kb` |
+| 9: self aliases distort fixture group inference | `test_review_self_aliases_do_not_make_direct_chat_group`; corrected synthetic self phone and affected goldens |
+| 10: trivial detection reason/vacuous other-connectors test | `test_detect_variants_and_confidence`, `test_detect_negative_other_connectors`; exact reason and nonempty cross-connector candidates |
+
+The earlier 500 MiB benchmark parsed 3,443,506 rows in 128.33 seconds at 68.58 MiB
+peak RSS (macOS, Python 3.12.14, Europe/Bucharest). Fix-round `scripts/check` passed: format, lint, strict types, PII scan and all
+740 tests in 47.45 seconds, including `test_streaming_50_mb`, with no skips and one
+expected existing network-guard warning. All fixtures are synthetic; real-device exports remain unverified.

@@ -2,6 +2,7 @@
 
 import shutil
 import zipfile
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -36,7 +37,7 @@ def fixture_rows(variant: str) -> list[Message]:
 def test_detect_variants_and_confidence(variant: str) -> None:
     result = CONNECTOR.detect(export_path(VARIANTS[variant]))
     assert result.confidence == 0.98
-    assert "Mira" not in result.reason
+    assert result.reason == "WhatsApp timestamped chat text"
 
 
 @pytest.mark.parametrize(
@@ -55,14 +56,14 @@ def test_detect_negative_other_formats(tmp_path: Path, name: str, text: str) -> 
 
 
 def test_detect_negative_other_connectors(tmp_path: Path) -> None:
-    # This WP's baseline has no other connector fixtures yet; always exercise a
-    # non-chat input, and check every other connector fixture when integrated.
+    # Exercise every integrated connector fixture as well as a non-chat input.
     other = tmp_path / "unrelated.txt"
     other.write_text("synthetic non-chat export\n")
     candidates = [other]
     for root in Path("fixtures").iterdir():
         if root.name != "whatsapp" and root.is_dir():
             candidates.extend(export_path(p) for p in root.iterdir() if (p / "meta.json").is_file())
+    assert len(candidates) > 1
     for path in candidates:
         assert CONNECTOR.detect(path).confidence == 0.0
 
@@ -185,6 +186,7 @@ def test_media_types_and_captions(
         "You deleted this message",
         "Acest mesaj a fost șters",
         "Ai șters acest mesaj",
+        "Dieser Nachricht wurde gelöscht",
         "Diese Nachricht wurde gelöscht",
         "Du hast diese Nachricht gelöscht",
         "Este mensaje fue eliminado",
@@ -192,8 +194,10 @@ def test_media_types_and_captions(
         "Borraste este mensaje",
     ],
 )
-def test_deleted_locales(tmp_path: Path, text: str) -> None:
-    [row] = parse_text(tmp_path, f"13/01/2024, 09:00 - Mira Example: {text}\n")
+@pytest.mark.parametrize("suffix", ["", "."])
+@pytest.mark.parametrize("marker", ["", "\u200e"])
+def test_deleted_locales(tmp_path: Path, text: str, suffix: str, marker: str) -> None:
+    [row] = parse_text(tmp_path, f"13/01/2024, 09:00 - Mira Example: {marker}{text}{suffix}\n")
     assert row.kind == "deleted"
     assert row.text is None
     assert row.media_type is None
@@ -206,7 +210,7 @@ def test_deleted_locales(tmp_path: Path, text: str) -> None:
         "Alex Demo created group Paper Moons",
         "Alex Demo added Mira Example",
         "Mira Example left",
-        'Alex Demo changed the subject to "Moon: Club"',
+        'Paper Moons: \u200echanged the subject to "Moon: Club"',
         "Missed voice call",
         "Your security code with Mira Example changed",
     ],
@@ -396,3 +400,138 @@ def test_occurrence_reset_on_timestamp_change(tmp_path: Path) -> None:
         stats = run_import(store, CONNECTOR, tmp_path / "_chat.txt", ctx)
         assert stats.seen == 3
         assert stats.inserted == 2
+
+
+@pytest.mark.parametrize("sender", ["Bob", "Alex Left", "Alex added Mira Example"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "my security code changed",
+        "Messages and calls are end-to-end encrypted.",
+        "Your security code with Mira Example changed",
+        "I added paper moons",
+        "left",
+        "Missed voice call",
+        "I saw Messages and calls are end-to-end encrypted.",
+        "\u200emy security code changed",
+        "\u200eI added paper moons",
+        "\u200eMissed voice call yesterday",
+        "\u200f\u200eMissed voice call",
+    ],
+)
+def test_review_user_phrases_keep_sender(tmp_path: Path, sender: str, text: str) -> None:
+    [row] = parse_text(tmp_path, f"[13/01/2024, 09:00] {sender}: {text}\n")
+    assert row.kind == "text"
+    assert row.sender_name == sender
+    assert row.sender_id == sender_id(sender)
+    assert row.text == clean(text)
+    assert row.chat_kind == "direct"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Messages and calls are end-to-end encrypted.",
+        "Messages and calls are end-to-end encrypted. No one outside of this chat, "
+        "not even WhatsApp, can read or listen to them. Tap to learn more.",
+        "Your security code with Mira Example changed",
+        "security code changed",
+        "created group Paper Moons",
+        "added Mira Example",
+        "left",
+        'changed the subject to "Moon: Club"',
+        "changed the group icon",
+        "changed the group description",
+        "Missed voice call",
+        "Missed video call",
+        "a creat grupul „Luni de hârtie”",
+        "mesajele și apelurile sunt criptate integral.",
+        "nachrichten und anrufe sind ende-zu-ende-verschlüsselt.",
+        "los mensajes y las llamadas están cifrados de extremo a extremo.",
+    ],
+)
+def test_review_marked_ios_notices(tmp_path: Path, text: str) -> None:
+    [row] = parse_text(tmp_path, f"[13/01/2024, 09:00] Paper Moons: \u200e{text}\n")
+    assert row.kind == "system"
+    assert row.sender_name is None
+    assert row.sender_id is None
+    assert not row.is_from_me
+    assert row.text == text
+
+
+@pytest.mark.parametrize("clock", ["a. m.", "p. m.", "a.\u00a0m.", "p.\u202fm."])
+def test_review_spaced_ampm_is_new_record(tmp_path: Path, clock: str) -> None:
+    rows = parse_text(
+        tmp_path,
+        f"1/13/24, 9:00 AM - Bob: previous\n1/13/24, 9:01 {clock} - Bob: x\n",
+    )
+    assert len(rows) == 2
+    assert rows[0].text == "previous"
+    assert rows[1].text == "x"
+    assert rows[1].ts.hour == (7 if clock.startswith("a") else 19)
+    assert rows[1].ts.minute == 1
+
+
+@pytest.mark.parametrize("body", ["Bob:", "Bob: "])
+def test_review_empty_user_body(tmp_path: Path, body: str) -> None:
+    [row] = parse_text(tmp_path, f"13/01/2024, 09:00 - {body}\n")
+    assert row.kind == "text"
+    assert row.sender_name == "Bob"
+    assert row.text is None
+
+
+def test_review_zero_records_count_only_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    assert parse_text(tmp_path, "private synthetic preamble\n") == []
+    assert "no records: connector=whatsapp count=0" in caplog.text
+    assert "private" not in caplog.text
+
+
+def test_review_detection_after_three_nonchat_files(tmp_path: Path) -> None:
+    for index in range(4):
+        (tmp_path / f"{index}.txt").write_text("synthetic non-chat text\n")
+    (tmp_path / "z_chat.txt").write_text("13/01/2024, 09:00 - Bob: x\n")
+    assert CONNECTOR.detect(tmp_path).confidence == 0.8
+
+
+def test_review_self_aliases_do_not_make_direct_chat_group() -> None:
+    for variant in ("android-en-us", "edge-cases"):
+        assert all(row.chat_kind == "direct" for row in fixture_rows(variant))
+
+
+def test_review_localized_timestamp_hash_contract(tmp_path: Path) -> None:
+    path = tmp_path / "WhatsApp Chat with Mira Example.txt"
+    path.write_text("13/01/2024, 09:00 - Bob: x\n")
+    rows = [
+        next(CONNECTOR.parse(path, ImportContext(tmp_path, ZoneInfo(tz), frozenset())))
+        for tz in ("UTC", "Europe/Bucharest")
+    ]
+    assert rows[0].chat_id == rows[1].chat_id
+    assert rows[0].source_row_id != rows[1].source_row_id
+    for row, tz in zip(rows, ("UTC", "Europe/Bucharest"), strict=True):
+        assert row.source_row_id == content_hash(
+            row.chat_id, row.ts.astimezone(ZoneInfo(tz)).isoformat(), "Bob", "x", 0
+        )
+
+
+def test_review_loose_ios_identity_depends_on_first_sender(tmp_path: Path) -> None:
+    first = parse_text(tmp_path, "[13/01/2024, 09:00] Mira Example: x\n")[0]
+    later = parse_text(tmp_path, "[13/01/2024, 09:01] Theo Fiction: y\n")[0]
+    assert first.chat_id != later.chat_id
+    assert first.chat_name == "Mira Example"
+    assert fixture_rows("ios-ro-group")[0].chat_name == "Mira Example"
+
+
+def test_review_detection_stops_before_remaining_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    file = tmp_path / "_chat.txt"
+    file.write_text("[13/01/2024, 09:00] Bob: x\n")
+
+    def paths(path: Path, pattern: str) -> Iterator[Path]:
+        yield file
+        raise AssertionError("Detection eagerly visited remaining paths")
+
+    monkeypatch.setattr(Path, "rglob", paths)
+    assert CONNECTOR.detect(tmp_path).confidence == 0.98

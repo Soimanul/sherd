@@ -24,25 +24,41 @@ _MARKS = dict.fromkeys(
     map(ord, "\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 )
 _DATE = r"(?P<a>\d{1,2})[/.](?P<b>\d{1,2})[/.](?P<y>\d{2}|\d{4})"
-_TIME = r"(?P<h>\d{1,2}):(?P<m>\d{2})(?::(?P<s>\d{2}))?(?:\s*(?P<ap>[ap]\.?m\.?))?"
+_TIME = r"(?P<h>\d{1,2}):(?P<m>\d{2})(?::(?P<s>\d{2}))?(?:\s*(?P<ap>[ap]\.?\s?m\.?))?"
 # Separate patterns avoid duplicate named groups in the two platform alternatives.
 _ANDROID = re.compile(rf"^{_DATE},\s*{_TIME}\s+-\s+(?P<body>.*)$", re.IGNORECASE)
 _IOS = re.compile(rf"^\[{_DATE},\s*{_TIME}\]\s*(?P<body>.*)$", re.IGNORECASE)
 _PHONE = re.compile(r"^\+?[\d ()\-\.]+$")
+# Group inference only: applied to already-classified system bodies, never senders.
 _GROUP = re.compile(
-    r"created (?:this |the )?group|added .+|left$|changed the (?:subject|group)|"
+    r"created (?:this |the )?group|added .+|left\.?$|"
+    r"changed the (?:subject|icon|description|group)|"
     r"a creat grupul|a adăugat|a părăsit|a schimbat (?:subiectul|numele)|"
     r"gruppe .*(?:erstellt|gegründet)|hinzugefügt|hat .*verlassen|gruppenbetreff|"
     r"creó el grupo|añadió|salió del grupo|cambió el asunto",
     re.IGNORECASE,
 )
+# Sender-prefixed iOS notices require the marker and a whole-text match.
 _SYSTEM = re.compile(
-    r"^(?:messages and calls are end-to-end encrypted|missed (?:voice|video) call|"
-    r"your security code with .+ changed|.+ security code changed|"
-    r"mesajele și apelurile sunt criptate|apel (?:vocal |video )?ratat|"
-    r"codul (?:tău )?de securitate|nachrichten und anrufe sind|"
-    r"verpasster (?:sprach|video)anruf|sicherheitsnummer|"
-    r"los mensajes y las llamadas|llamada perdida|cambió tu código de seguridad)",
+    r"(?:messages and calls are end-to-end encrypted(?:\.|"
+    r"\. No one outside of this chat, not even WhatsApp, can read or listen to them\. "
+    r"Tap to learn more\.)?|missed (?:voice|video) call\.?|"
+    r"your security code with [^\n]+ changed\.?|security code changed\.?|"
+    r"created (?:this |the )?group(?: [^\n]+)?|added [^\n]+|left\.?|"
+    r"changed the (?:subject|(?:group )?icon|(?:group )?description)(?: [^\n]+)?|"
+    r"mesajele și apelurile sunt criptate(?: integral)?\.?|"
+    r"apel (?:vocal |video )?ratat\.?|codul (?:tău )?de securitate "
+    r"cu [^\n]+ s-a schimbat\.?|a creat grupul(?: [^\n]+)?|a adăugat [^\n]+|"
+    r"a părăsit(?: grupul)?\.?|a schimbat (?:subiectul|numele|pictograma|descrierea)"
+    r"(?: [^\n]+)?|nachrichten und anrufe sind ende-zu-ende-verschlüsselt\.?|"
+    r"verpasster (?:sprach|video)anruf\.?|sicherheitsnummer "
+    r"mit [^\n]+ hat sich geändert\.?|gruppe(?: [^\n]+)? (?:erstellt|gegründet)\.?|"
+    r"hinzugefügt(?: [^\n]+)?|hat (?:die gruppe )?verlassen\.?|"
+    r"gruppen(?:betreff|bild|beschreibung) geändert(?: [^\n]+)?|"
+    r"los mensajes y las llamadas están cifrados de extremo a extremo\.?|"
+    r"llamada perdida\.?|cambió tu código de seguridad(?: con [^\n]+)?\.?|"
+    r"creó el grupo(?: [^\n]+)?|añadió [^\n]+|salió del grupo\.?|"
+    r"cambió (?:el asunto|el icono|la descripción)(?: [^\n]+)?)",
     re.IGNORECASE,
 )
 _DELETED = frozenset(
@@ -86,6 +102,11 @@ def sender_id(sender: str) -> str:
 def is_self(sender: str, identities: frozenset[str]) -> bool:
     key = sender_id(sender)
     return any(sender_id(clean(identity).strip()) == key for identity in identities)
+
+
+def marked_line(line: str) -> str:
+    """Retain body controls until the leading iOS marker has been checked."""
+    return line.lstrip("\ufeff" + "".join(chr(key) for key in _MARKS))
 
 
 def prefix(line: str) -> re.Match[str] | None:
@@ -186,7 +207,7 @@ class ChatFile:
 
 
 def chat_files(path: Path) -> Iterator[ChatFile]:
-    files = sorted(path.rglob("*")) if path.is_dir() else [path]
+    files = path.rglob("*") if path.is_dir() else iter([path])
     for file in files:
         if not file.is_file():
             continue
@@ -203,10 +224,15 @@ def chat_files(path: Path) -> Iterator[ChatFile]:
 
 
 def split_body(body: str) -> tuple[str | None, str]:
-    if _SYSTEM.search(body) or _GROUP.search(body.partition(": ")[0]):
-        return None, body
     sender, sep, text = body.partition(": ")
-    return (sender.strip(), text) if sep else (None, body)
+    # An empty body may be exported without the separator's trailing space.
+    if not sep and body.endswith(":"):
+        sender, sep, text = body[:-1], ":", ""
+    if not sep:
+        return None, clean(body)
+    if text.startswith("\u200e") and _SYSTEM.fullmatch(clean(text).strip()):
+        return None, clean(text)
+    return clean(sender).strip(), clean(text)
 
 
 def records(file: ChatFile) -> Iterator[tuple[re.Match[str], str | None, str]]:
@@ -215,7 +241,7 @@ def records(file: ChatFile) -> Iterator[tuple[re.Match[str], str | None, str]]:
     parts: list[str] = []
     with file.open() as stream:
         for raw in stream:
-            line = clean(raw.rstrip("\r\n"))
+            line = marked_line(raw.rstrip("\r\n"))
             match = prefix(line)
             if match:
                 if current is not None:
@@ -224,7 +250,7 @@ def records(file: ChatFile) -> Iterator[tuple[re.Match[str], str | None, str]]:
                 sender, body = split_body(match["body"])
                 parts = [body]
             elif current is not None:
-                parts.append(line)
+                parts.append(clean(line))
     if current is not None:
         yield current, sender, "\n".join(parts)
 
@@ -265,14 +291,12 @@ def media(text: str) -> tuple[MediaType, str | None] | None:
 
 class WhatsAppConnector:
     id = "whatsapp"
-    version = "1"
+    version = "2"
     display_name = "WhatsApp"
 
     def detect(self, path: Path) -> DetectResult:
         try:
-            for index, file in enumerate(chat_files(path)):
-                if index >= 3:
-                    break
+            for file in chat_files(path):
                 lines = file.sample().splitlines()
                 matches = sum(prefix(clean(line.lstrip("\ufeff"))) is not None for line in lines)
                 if matches:
@@ -283,8 +307,8 @@ class WhatsAppConnector:
         return DetectResult(0.0, "No WhatsApp chat text")
 
     def parse(self, path: Path, ctx: ImportContext) -> Iterator[Message]:
-        skipped = unnamed = 0
-        for file in chat_files(path):
+        skipped = unnamed = emitted = 0
+        for file in sorted(chat_files(path), key=lambda file: (file.path, file.member or "")):
             with file.open() as lines:
                 order = detect_date_order(iter(lines))
             senders: set[str] = set()
@@ -293,7 +317,7 @@ class WhatsAppConnector:
             # Only prefixes are needed for chat-wide metadata, not multiline text.
             with file.open() as lines:
                 for line in lines:
-                    match = prefix(clean(line.rstrip("\r\n")))
+                    match = prefix(marked_line(line.rstrip("\r\n")))
                     if match is None:
                         continue
                     try:
@@ -304,7 +328,11 @@ class WhatsAppConnector:
                     group |= sender is None and _GROUP.search(body) is not None
                     if sender:
                         if len(senders) < 3:
-                            senders.add(sender_id(sender))
+                            senders.add(
+                                "self"
+                                if is_self(sender, ctx.self_identities)
+                                else sender_id(sender)
+                            )
                         if fallback is None and not is_self(sender, ctx.self_identities):
                             fallback = sender
             name = file.chat_name() or fallback
@@ -335,15 +363,16 @@ class WhatsAppConnector:
                 occurrence = counts.get(key, 0)
                 counts[key] = occurrence + 1
                 kind: Literal["text", "media", "system", "deleted"] = "text"
-                text: str | None = original
+                text: str | None = original or None
                 media_type: MediaType | None = None
                 if sender is None:
                     kind = "system"
-                elif original.strip().casefold() in _DELETED:
+                elif original.strip().removesuffix(".").casefold() in _DELETED:
                     kind, text = "deleted", None
                 elif attachment := media(original):
                     kind = "media"
                     media_type, text = attachment
+                emitted += 1
                 yield Message(
                     source_file=source_file,
                     source_row_id=content_hash(
@@ -362,6 +391,9 @@ class WhatsAppConnector:
                     kind=kind,
                     media_type=media_type,
                 )
+
+        if not emitted:
+            logger.warning("no records: connector=whatsapp count=0")
 
         if skipped:
             logger.warning("skipped malformed rows: connector=whatsapp count=%d", skipped)

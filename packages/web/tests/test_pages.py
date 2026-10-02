@@ -459,7 +459,7 @@ def test_privacy_counter_remote(client: ClientFactory, demo_db: Path, sherd_home
         page = web.get(path).text
         badge = page[page.index('class="privacy-badge"') :]
         badge = badge[: badge.index("</a>")]
-        assert '<span class="num">14,465</span> bytes sent' in badge
+        assert "14.1 KB sent to 1 provider" in badge
         assert t("privacy.counter_zero") not in badge
 
 

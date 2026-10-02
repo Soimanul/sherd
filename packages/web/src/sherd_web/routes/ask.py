@@ -20,11 +20,18 @@ import pyarrow as pa
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from sherd_agent import config, providers
-from sherd_agent.ask import ANSWER_CELL_CHARS, ANSWER_CSV_BYTES, ANSWER_ROWS, Asker, AskError
+from sherd_agent.ask import (
+    ANSWER_CELL_CHARS,
+    ANSWER_CSV_BYTES,
+    ANSWER_ROWS,
+    Asker,
+    AskError,
+    PlanError,
+)
 from sherd_agent.llm import LLM, Choice, NoProviderError, OfflineRefusedError, resolve
 from sherd_agent.providers import Provider, ProviderError
 from sherd_agent.providers.netguard import OfflineError, offline_guard
-from sherd_agent.sql_guard import ROW_BUDGET
+from sherd_agent.sql_guard import ROW_BUDGET, QueryTimeoutError, SqlRejectedError
 from sherd_core import Store
 from sherd_core.store import StoreError
 from sherd_insights import DigResult
@@ -266,7 +273,7 @@ def _run(db_path: Path, question: str, *, offline: bool, consent: str, consent_f
             try:
                 result = asker.ask(question)
             except AskError as error:
-                view.error = t("pages.ask.failed", reason=str(error))
+                view.error = display_error(error)
                 if error.sql:
                     view.sql, view.sql_text = sql_tokens(error.sql), error.sql
                 return view
@@ -291,6 +298,26 @@ def _run(db_path: Path, question: str, *, offline: bool, consent: str, consent_f
         if result.chart is not None:
             view.chart = _chart_card(result.table, result.chart)
     return view
+
+
+def display_error(error: Exception) -> str:
+    """Fixed category message and at most 300 printable detail characters."""
+    logger.warning("ask failed: error=%s", type(error).__name__)
+    detail = " ".join("".join(c if c.isprintable() else " " for c in str(error)[:1200]).split())[
+        :300
+    ]
+    cause = error.__context__ if isinstance(error, AskError) else error
+    if isinstance(error, (ProviderError, OfflineError)):
+        message = "Provider unavailable."
+    elif isinstance(cause, (TimeoutError, QueryTimeoutError)) or "timed out" in detail.lower():
+        message = "The query timed out."
+    elif isinstance(cause, SqlRejectedError) or "only SELECT/WITH" in detail:
+        message = "The query was rejected by the safety guard."
+    elif isinstance(cause, PlanError) or "valid plan" in detail:
+        message = "The model output was invalid."
+    else:
+        message = "The question could not be answered."
+    return f"{message} {detail}" if detail else message
 
 
 # ---- Routes -----------------------------------------------------------------------------------
@@ -323,6 +350,8 @@ def ask_post(request: Request, form: Form, store: StoreDep, settings: SettingsDe
     counts = store.table_counts() if store is not None else {}
     if store is None or not any(counts.values()):
         context = _context(store, View(question=question, offline=offline))
+        if partial(request) == RESULT_ID:
+            return render(request, "pages/_ask_result.html", {**context, "badge_oob": True})
         return render(request, "pages/ask.html", {**context, "empty": True})
     if not question or len(question) > QUESTION_LIMIT:
         key = "pages.ask.too_long" if question else "pages.ask.no_question"
@@ -340,12 +369,18 @@ def ask_post(request: Request, form: Form, store: StoreDep, settings: SettingsDe
             )
         except (OfflineError, ProviderError) as error:
             view = View(question=question, offline=offline, status=provider_status())
-            view.error = t("pages.ask.provider_failed", reason=str(error))
-        except (ValueError, OSError, StoreError, duckdb.Error) as error:
-            logger.warning("ask failed: error=%s", type(error).__name__)
+            view.error = display_error(error)
+        except (
+            ValueError,
+            OSError,
+            StoreError,
+            duckdb.Error,
+            TimeoutError,
+            QueryTimeoutError,
+        ) as error:
             view = View(question=question, offline=offline, status=provider_status())
-            view.error = t("pages.ask.failed", reason=str(error))
+            view.error = display_error(error)
     context = {**_context(store, view), "empty": False, "csrf": CSRF_TOKEN}
     if partial(request) == RESULT_ID:
-        return render(request, "pages/_ask_result.html", context)
+        return render(request, "pages/_ask_result.html", {**context, "badge_oob": True})
     return render(request, "pages/ask.html", context)

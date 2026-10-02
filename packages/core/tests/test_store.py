@@ -533,3 +533,26 @@ def test_read_only_checkpoint_leaves_file_and_data_unchanged(
         assert store.query("SELECT * FROM messages").to_pylist() == data
         assert db_path.read_bytes() == before
     assert db_path.read_bytes() == before
+
+
+def test_sandbox_persists_until_all_writable_connections_close(
+    db_path: Path, tmp_path: Path
+) -> None:
+    with Store.open(db_path) as writable:
+        with Store.open(db_path, sandboxed=True):
+            pass
+        assert writable.query(
+            "SELECT current_setting('enable_external_access') AS external, "
+            "current_setting('lock_configuration') AS locked"
+        ).to_pylist() == [{"external": False, "locked": True}]
+        with pytest.raises(duckdb.Error):
+            writable._conn.execute("COPY (SELECT 1) TO ? (FORMAT CSV)", [str(tmp_path / "x.csv")])
+        with pytest.raises(duckdb.Error):
+            writable._conn.execute("SET threads = 1")
+        import_id = writable.begin_import("synthetic", "1", "hash", "UTC")
+        writable.finish_import(import_id, "succeeded")
+    with Store.open(db_path) as reopened:
+        assert reopened.query(
+            "SELECT current_setting('enable_external_access') AS external, "
+            "current_setting('lock_configuration') AS locked"
+        ).to_pylist() == [{"external": True, "locked": False}]

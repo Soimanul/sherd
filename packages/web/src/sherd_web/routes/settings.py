@@ -17,7 +17,7 @@ from sherd_connectors import registry as connectors
 from sherd_core import Store
 from sherd_core.paths import default_db_path, sherd_home
 
-from sherd_web.deps import SettingsDep, StoreDep, render
+from sherd_web.deps import SettingsDep, StoreDep, privacy_state, render
 from sherd_web.routes import ask
 from sherd_web.routes._pages import Form, shell
 
@@ -149,13 +149,10 @@ def settings_page(request: Request, store: StoreDep, settings: SettingsDep) -> R
         consent = dict(config.load().get("consent", {}))
     except ValueError as error:
         consent, problems = {}, [*problems, f"{config.config_path()}: {error}"]
-    try:
-        counters = privacy.load()
-    except ValueError as error:
-        counters, problems = (
-            {"remote": {}, "local": {}},
-            [*problems, f"{privacy.privacy_path()}: {error}"],
-        )
+    ledger = privacy_state()
+    counters = ledger["data"]
+    if ledger["state"] == "unknown":
+        problems.append("Privacy ledger unreadable")
     try:
         status = ask.provider_status()
     except ValueError as error:
@@ -169,6 +166,7 @@ def settings_page(request: Request, store: StoreDep, settings: SettingsDep) -> R
         problems=problems,
         status=status,
         provider_rows=provider_rows(consent),
+        ledger=ledger,
         remote=remote,
         local=usage_rows(counters.get("local", {})),
         remote_bytes=sum(row.bytes_sent for row in remote),

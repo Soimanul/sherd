@@ -193,12 +193,44 @@ def is_current(path: str, href: str) -> bool:
 templates.env.globals["is_current"] = is_current
 
 
-def privacy_bytes() -> int:
-    """Bytes sent to remote providers so far, for the nav badge; 0 when unreadable."""
+def privacy_state() -> dict[str, Any]:
+    """Read validated accounting; missing means zero, unreadable means unknown."""
     try:
-        return privacy.remote_bytes_sent()
-    except (OSError, ValueError, AttributeError):
-        return 0
+        path = privacy.privacy_path()
+        try:
+            path.stat()
+        except FileNotFoundError:
+            data: dict[str, Any] = {"remote": {}, "local": {}}
+        else:
+            data = privacy.load()
+        for section in ("remote", "local"):
+            if not isinstance(data[section], dict):
+                raise ValueError("invalid ledger section")
+            for totals in data[section].values():
+                if not isinstance(totals, dict):
+                    raise ValueError("invalid ledger totals")
+                for key in privacy.COUNTERS:
+                    value = totals.get(key, 0)
+                    if type(value) is not int or value < 0:
+                        raise ValueError("invalid ledger counter")
+        sent = sum(v.get("bytes_sent", 0) for v in data["remote"].values())
+        state = "remote" if sent else "local" if data["local"] else "zero"
+        value = float(sent)
+        unit = "bytes"
+        for unit in ("bytes", "KB", "MB", "GB"):
+            if value < 1024 or unit == "GB":
+                break
+            value /= 1024
+        human = f"{sent:,} bytes" if unit == "bytes" else f"{value:,.1f} {unit}"
+        return dict(
+            state=state,
+            bytes=sent,
+            human=human,
+            providers=sum(v.get("bytes_sent", 0) > 0 for v in data["remote"].values()),
+            data=data,
+        )
+    except (OSError, ValueError, AttributeError, KeyError, TypeError):
+        return dict(state="unknown", bytes=0, data={"remote": {}, "local": {}})
 
 
-templates.env.globals["privacy_bytes"] = privacy_bytes
+templates.env.globals["privacy_state"] = privacy_state

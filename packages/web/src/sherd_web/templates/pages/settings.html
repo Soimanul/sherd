@@ -18,8 +18,9 @@
 
 {% call section(t("pages.settings.privacy_title"), "privacy-title") %}
 <div class="settings-privacy">
-  <div class="card privacy-card{{ ' privacy-card-sent' if remote_bytes }}">
+  <div class="card privacy-card{{ ' privacy-card-sent' if remote_bytes or ledger.state == 'unknown' }}">
     <p class="privacy-counter">
+      {% if ledger.state == "unknown" %}<span>Privacy ledger unreadable</span>{% else %}
       <span class="privacy-counter-value">
         <span class="num privacy-counter-num">{{ remote_bytes | number }}</span>
         <span>{{ "byte" if remote_bytes == 1 else "bytes" }} {{ t("privacy.counter_label") }}</span>
@@ -28,11 +29,12 @@
         {%- if remote_bytes %}{{ t("pages.settings.sent_remote", requests=remote_requests | number, providers=remote | length) }}
         {%- else %}{{ t("pages.settings.sent_none") }}{% endif -%}
       </span>
+      {% if ledger.state == "local" %}<small>local model</small>{% endif %}{% endif %}
     </p>
   </div>
   <ul class="privacy-lines">
     <li>{{ icon("i-shield") }}<span>{{ t("privacy.no_telemetry") }}</span></li>
-    <li>{{ icon("i-lock") }}<span>{{ t("privacy.local_only") if not remote_bytes else t("pages.settings.remote_line") }}</span></li>
+    <li>{{ icon("i-lock") }}<span>{{ t("privacy.local_only") if not remote_bytes and ledger.state != "unknown" else t("pages.settings.remote_line") }}</span></li>
     {%- if status.choice %}
     <li>{{ icon("i-info" if status.choice.remote else "i-lock") }}<span>
       {%- if status.choice.remote %}{{ t("privacy.remote_model", provider=provider_label(status.choice.provider)) }}

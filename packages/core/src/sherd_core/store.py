@@ -117,8 +117,11 @@ class Store:
 
         `sandboxed=True` disables external access (file and HTTP table functions, ATTACH, COPY,
         extensions) and locks the configuration, for running untrusted SQL. DuckDB shares one
-        database instance per file within a process, so these settings are instance-wide: while
-        a sandboxed store is open, every store on that file in the process is sandboxed too.
+        database instance per file within a process, so these settings are instance-wide: until
+        every connection to that database instance closes, every store on that file in the
+        process remains sandboxed, even after the sandboxed store closes. CLI dig and web
+        run in separate processes; the CLI never mixes writable and sandboxed stores in
+        one process.
         """
         path = Path(path)
         if read_only and not path.is_file():

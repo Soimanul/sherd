@@ -349,7 +349,7 @@ def test_allowing_records_consent_and_answers(
     assert '<section class="card consent"' not in again
     assert len(provider.calls) == 4
     badge = again[again.index('class="privacy-badge"') :]
-    assert f"{privacy.remote_bytes_sent():,}</span> bytes sent" in badge[: badge.index("</a>")]
+    assert "sent to 1 provider" in badge[: badge.index("</a>")]
 
 
 def test_cancel_sends_nothing(
@@ -457,3 +457,140 @@ def test_sql_tokens_cover_the_text() -> None:
     assert ("n", "1.5") in tokens
     assert ("c", "-- note") in tokens
     assert ("f", "upper") in tokens
+
+
+@pytest.mark.parametrize("state", ["zero", "local", "remote", "unknown", "permission"])
+def test_badge_states_agree_with_settings(
+    state: str,
+    client: ClientFactory,
+    demo_db: Path,
+    sherd_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if state in ("local", "remote"):
+        privacy.privacy_path().write_text(
+            json.dumps(
+                {
+                    "remote": {"anthropic": {"bytes_sent": 2048}} if state == "remote" else {},
+                    "local": {"ollama": {"requests": 1}},
+                }
+            )
+        )
+    elif state == "unknown":
+        privacy.privacy_path().write_text('{"remote": []}')
+    elif state == "permission":
+        privacy.privacy_path().write_text("{}")
+
+        def denied() -> dict[str, Any]:
+            raise PermissionError("synthetic")
+
+        monkeypatch.setattr(privacy, "load", denied)
+    body = client(demo_db).get("/settings").text
+    badge = body[body.index('class="privacy-badge"') :].split("</a>")[0]
+    expected = "unknown" if state == "permission" else state
+    assert f'data-state="{expected}"' in badge
+    if expected == "remote":
+        assert "#i-up" in badge
+        assert "#i-shield" not in badge
+        assert "2.0 KB sent to 1 provider" in badge
+    elif expected == "unknown":
+        assert body.count("Privacy ledger unreadable") >= 2
+        assert "0 bytes sent" not in badge
+    else:
+        assert "#i-shield" in badge
+        assert "0 bytes sent" in badge
+        if expected == "local":
+            assert body.count("local model") >= 2
+
+
+def test_remote_ask_returns_fresh_oob_badge(
+    client: ClientFactory,
+    demo_db: Path,
+    sherd_home: Path,
+    use: Use,
+) -> None:
+    use(FakeRemote({"sql": SQL}))
+    body = post(
+        client(demo_db),
+        {"question": QUESTION, "consent": "allow", "provider": "anthropic"},
+        ORIGIN | HX,
+    ).text
+    from sherd_web.deps import privacy_state
+
+    assert 'id="privacy-badge"' in body
+    assert 'hx-swap-oob="outerHTML"' in body
+    assert privacy_state()["human"] + " sent to 1 provider" in body
+
+
+def test_provider_error_detail_is_bounded_and_logs_only_class(
+    client: ClientFactory,
+    demo_db: Path,
+    use: Use,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from sherd_agent.providers import ProviderError
+
+    use(stub({}), configured="stub")
+
+    def fail(*args: Any) -> Provider:
+        raise ProviderError("ERROR_SENTINEL_\x00" + "x" * 150000)
+
+    monkeypatch.setattr(ask, "CREATE", fail)
+    body = post(client(demo_db), {"question": QUESTION}, ORIGIN | HX).text
+    assert "Provider unavailable." in body
+    assert "x" * 301 not in body
+    assert "\x00" not in body
+    assert len(body) < 5000
+    assert "ProviderError" in caplog.text
+    assert "ERROR_SENTINEL" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("error", "message"),
+    [
+        (ValueError("only SELECT/WITH reads are allowed"), "safety guard"),
+        (TimeoutError("timed out"), "timed out"),
+        (ValueError("model did not return a valid plan"), "model output was invalid"),
+        (ValueError("query failed " + "x" * 150000), "could not be answered"),
+    ],
+)
+def test_error_categories_and_query_detail_budget(error: Exception, message: str) -> None:
+    displayed = ask.display_error(error)
+    assert message in displayed
+    assert len(displayed.split(". ", 1)[1]) <= 300
+
+
+def test_failed_remote_ask_returns_accounted_oob_badge(
+    client: ClientFactory,
+    demo_db: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sherd_agent.providers import ProviderError
+
+    def failed_attempt(*args: Any, **kwargs: Any) -> ask.View:
+        privacy.privacy_path().write_text(
+            json.dumps({"remote": {"anthropic": {"bytes_sent": 2048}}, "local": {}})
+        )
+        raise ProviderError("synthetic transport failure")
+
+    monkeypatch.setattr(ask, "_run", failed_attempt)
+    body = post(client(demo_db), {"question": QUESTION}, ORIGIN | HX).text
+    assert 'hx-swap-oob="outerHTML"' in body
+    assert "2.0 KB sent to 1 provider" in body
+    assert "Provider unavailable." in body
+
+
+def test_wrapped_guard_errors_keep_the_error_category() -> None:
+    from sherd_agent.ask import AskError
+    from sherd_agent.sql_guard import SqlRejectedError
+
+    def fail() -> None:
+        try:
+            raise SqlRejectedError("exactly one statement is allowed")
+        except SqlRejectedError:
+            raise AskError("query failed") from None
+
+    with pytest.raises(AskError) as caught:
+        fail()
+    assert "safety guard" in ask.display_error(caught.value)

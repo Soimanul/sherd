@@ -166,10 +166,9 @@
 </div>
 {%- endmacro %}
 
-{#- The "0 bytes sent" badge; Settings (WP-15) owns the full counter. -#}
-{% macro privacy_badge(bytes_sent=0) -%}
-<a class="privacy-badge" href="/settings" title="{{ t('privacy.badge_title') }}">
-  {{ icon("i-shield") }}
-  {%- if bytes_sent == 0 %}{{ t("privacy.counter_zero") }}{% else %}<span class="num">{{ bytes_sent | number }}</span> bytes {{ t("privacy.counter_label") }}{% endif -%}
+{% macro privacy_badge(ledger, oob=False) -%}
+<a class="privacy-badge" id="privacy-badge" data-state="{{ ledger.state }}" href="/settings" title="{{ t('privacy.badge_title') }}"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
+  {{ icon("i-up" if ledger.state == "remote" else "i-info" if ledger.state == "unknown" else "i-shield") }}
+  <span>{% if ledger.state == "unknown" %}Privacy ledger unreadable{% elif ledger.state == "remote" %}{{ ledger.human }} sent to {{ ledger.providers }} provider{{ "s" if ledger.providers != 1 }}{% else %}{{ t("privacy.counter_zero") }}{% if ledger.state == "local" %}<small class="privacy-local">local model</small>{% endif %}{% endif %}</span>
 </a>
 {%- endmacro %}

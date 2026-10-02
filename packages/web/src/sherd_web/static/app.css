@@ -2539,3 +2539,12 @@ pre {
     margin-left: calc(var(--space-2) * -1);
   }
 }
+
+/* Accounting states refreshed after Ask. */
+.privacy-badge[data-state="remote"], .privacy-badge[data-state="unknown"] {
+  color: var(--color-text-2);
+  background: var(--color-surface-2);
+  border-color: var(--color-line-strong);
+}
+.privacy-badge[data-state="local"] { height: auto; min-height: 28px; padding-block: var(--space-1); }
+.privacy-local { display: block; color: var(--color-text-3); }

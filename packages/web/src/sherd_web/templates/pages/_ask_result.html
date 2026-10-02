@@ -129,3 +129,5 @@
   </section>
   {%- endif %}
 </div>
+
+{% if badge_oob %}{% from "macros/components.html" import privacy_badge %}{{ privacy_badge(privacy_state(), oob=True) }}{% endif %}

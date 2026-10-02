@@ -1,0 +1,71 @@
+{#- Messages, Music and Money (routes/domains.py): headline tiles and one chart card per dig,
+    under a filter bar that is a plain GET form, enhanced by HTMX to swap only the results. -#}
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, scale, empty_state, command %}
+{% from "pages/_macros.html" import date_field, filter_status, day %}
+
+{% block title %}{{ domain.title }}{% endblock %}
+
+{% block header %}
+{%- if empty %}
+{{ page_header(domain.title) }}
+{%- else %}
+{{ page_header(domain.title, t(domain.lede, rows=rows | number)) }}
+{%- if span %}
+{{ scale(day(span[0]) ~ " – " ~ day(span[1]), rows | number ~ " " ~ t("pages." ~ name ~ ".rows")) }}
+{%- endif %}
+{%- endif %}
+{% endblock %}
+
+{% block content %}
+{%- if empty %}
+{% call empty_state(name) %}
+<div class="empty-command">
+  <p class="label">{{ t("empty." ~ name ~ ".action") }}</p>
+  {{ command("cmd-dig-" ~ name, t("pages." ~ name ~ ".command")) }}
+</div>
+{% endcall %}
+{%- else %}
+<form class="filters" method="get" action="{{ domain.path }}" aria-label="{{ t('pages.filters.label', page=domain.title) }}"
+      hx-get="{{ domain.path }}" hx-target="#{{ results_id }}" hx-swap="outerHTML"
+      hx-push-url="true" hx-history="false" hx-sync="this:replace" hx-indicator="#{{ results_id }}">
+  <div class="filters-fields">
+    {{ date_field("date_from", t("pages.filters.from"), filters.date_from, span) }}
+    {{ date_field("date_to", t("pages.filters.to"), filters.date_to, span) }}
+    <label class="field">
+      <span class="label">{{ t("pages.filters.top") }}</span>
+      <select class="select" name="top_n">
+        {%- for n in top_n_choices %}
+        <option value="{{ n }}"{% if n == filters.top_n %} selected{% endif %}>{{ n }}</option>
+        {%- endfor %}
+      </select>
+    </label>
+    <label class="field">
+      <span class="label">{{ t("pages.filters.group") }}</span>
+      <select class="select" name="granularity">
+        {%- for g in granularities %}
+        <option value="{{ g }}"{% if g == filters.granularity %} selected{% endif %}>{{ t("pages.filters.by_" ~ g) }}</option>
+        {%- endfor %}
+      </select>
+    </label>
+    {%- if domain.has_currency and currencies %}
+    <label class="field">
+      <span class="label">{{ t("pages.filters.currency") }}</span>
+      <select class="select" name="currency">
+        <option value=""{% if not filters.currency %} selected{% endif %}>{{ t("pages.filters.currency_default", currency=currencies[0]) }}</option>
+        {%- for code in currencies %}
+        <option value="{{ code }}"{% if code == filters.currency %} selected{% endif %}>{{ code }}</option>
+        {%- endfor %}
+      </select>
+    </label>
+    {%- endif %}
+  </div>
+  <div class="filters-actions">
+    <button class="btn btn-primary" type="submit">{{ t("pages.filters.apply") }}</button>
+    <a class="btn btn-ghost" href="{{ domain.path }}">{{ t("pages.filters.reset") }}</a>
+  </div>
+</form>
+{{ filter_status(filters, filters.currency or (currencies[0] if domain.has_currency and currencies else None)) }}
+{% include "pages/_domain_results.html" %}
+{%- endif %}
+{% endblock %}

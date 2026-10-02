@@ -1,0 +1,75 @@
+{#- Pieces the WP-15 pages share. Shell components live in macros/components.html. -#}
+{% from "macros/icons.html" import icon %}
+{% from "macros/components.html" import empty_state, notice %}
+
+{#- 2025-03-09 -> "9 Mar 2025". -#}
+{% macro day(d) -%}
+{{ d.day }} {{ d.strftime("%b") }} {{ d.year }}
+{%- endmacro %}
+
+{#- "9 Mar 2025 to 30 Jun 2025", "from 9 Mar 2025", or "the whole range". -#}
+{% macro range_text(date_from, date_to) -%}
+{%- if date_from and date_to -%}{{ day(date_from) }} to {{ day(date_to) }}
+{%- elif date_from -%}from {{ day(date_from) }}
+{%- elif date_to -%}up to {{ day(date_to) }}
+{%- else -%}{{ t("pages.filters.whole_range") }}{%- endif -%}
+{%- endmacro %}
+
+{#- The one-line summary of what the cards show. HTMX swaps it out of band. -#}
+{% macro filter_status(filters, currency=None, oob=False) -%}
+<p class="filter-status" id="filter-status" role="status"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {{- t("pages.filters.status", range=range_text(filters.date_from, filters.date_to), granularity=filters.granularity, top_n=filters.top_n) -}}
+  {%- if currency %} {{ t("pages.filters.status_currency", currency=currency) }}{% endif -%}
+</p>
+{%- endmacro %}
+
+{#- A date field bounded by the data's span. -#}
+{% macro date_field(name, label, value, span) -%}
+<label class="field">
+  <span class="label">{{ label }}</span>
+  <input class="input" type="date" name="{{ name }}" value="{{ value.isoformat() if value else '' }}"
+         {%- if span %} min="{{ span[0].isoformat() }}" max="{{ span[1].isoformat() }}"{% endif %}>
+</label>
+{%- endmacro %}
+
+{#- One pending or missing dig as a compact empty state. -#}
+{% macro dig_gap(slot_or_dig, kind) -%}
+{%- if kind == "missing" %}
+{{ empty_state("dig_missing", {"dig_id": slot_or_dig}, size="sm", heading="h3") }}
+{%- elif kind == "unavailable" %}
+{%- set table = slot_or_dig.requires | join(", ") %}
+{{ empty_state("dig_unavailable", {"table": table, "source_kind": source_kind(slot_or_dig.requires)}, size="sm", heading="h3") }}
+{%- else %}
+{{ empty_state("dig_failed", {"title": slot_or_dig.title}, size="sm", heading="h3") }}
+{%- endif %}
+{%- endmacro %}
+
+{#- The empty state for a page slot (routes/_pages.Slot) that has no card. -#}
+{% macro slot_gap(s) -%}
+{%- if s.missing %}{{ dig_gap(s.dig_id, "missing") }}
+{%- elif s.unavailable %}{{ dig_gap(s.unavailable, "unavailable") }}
+{%- elif s.failed %}{{ dig_gap(s.failed, "failed") }}{% endif %}
+{%- endmacro %}
+
+{% macro source_kind(tables) -%}
+{%- set kinds = {"messages": "chat messages", "media_plays": "listening history", "transactions": "bank transactions", "events": "watch or browsing history", "locations": "location history"} -%}
+{%- for table in tables %}{{ kinds.get(table, table) }}{{ " and " if not loop.last }}{% endfor -%}
+{%- endmacro %}
+
+{#- Notices for digs that failed to compute. -#}
+{% macro failed_notice(failed) -%}
+{%- if failed %}
+{% call notice("danger", "i-danger") %}
+{{ t("pages.charts.failed_one" if failed | length == 1 else "pages.charts.failed", count=failed | length, names=failed | map(attribute="title") | join(", ")) }}
+{% endcall %}
+{%- endif %}
+{%- endmacro %}
+
+{#- Warnings for filter values that were left out. -#}
+{% macro problems_notice(problems) -%}
+{%- if problems %}
+{% call notice("warning", "i-warning") %}
+{%- for problem in problems %}{{ problem }}{{ " " if not loop.last }}{% endfor -%}
+{% endcall %}
+{%- endif %}
+{%- endmacro %}

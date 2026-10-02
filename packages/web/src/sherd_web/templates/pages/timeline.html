@@ -1,0 +1,102 @@
+{#- Timeline (routes/timeline.py): everything on one axis, a period's soundtrack, what changed
+    year over year, and two correlations that say they are only correlations. -#}
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, scale, section, chart_card, empty_state, command %}
+{% from "macros/icons.html" import icon %}
+{% from "pages/_macros.html" import day, slot_gap, failed_notice %}
+
+{% block title %}Timeline{% endblock %}
+
+{% block header %}
+{{ page_header("Timeline", None if empty else t("pages.timeline.lede")) }}
+{%- if not empty and span %}
+{{ scale(day(span[0]) ~ " – " ~ day(span[1]), t("pages.timeline.scale", count=counts.values() | select | list | length)) }}
+{%- endif %}
+{% endblock %}
+
+{% block content %}
+{%- if empty %}
+{% call empty_state("timeline") %}
+<div class="empty-command">
+  <p class="label">{{ t("empty.timeline.action") }}</p>
+  {{ command("cmd-dig-timeline", t("pages.timeline.command")) }}
+</div>
+{% endcall %}
+{%- else %}
+{{ failed_notice(failed) }}
+{% include "pages/_timeline_controls.html" %}
+
+{% call section(t("pages.timeline.trends_title"), "trends-title", t("pages.timeline.trends_note")) %}
+{%- if trends.card %}
+<div class="trends">
+  {{ chart_card(trends.card, demo=settings.demo, wide=True) }}
+  {%- if changes %}
+  {%- set first = changes[0] %}
+  <div class="card trends-table">
+    <h3 class="card-title" id="changes-title">{{ t("pages.timeline.changes_title") }}</h3>
+    <p class="card-note">{{ t("pages.timeline.changes_note") }}</p>
+    <div class="chart-table-scroll table-full" role="region" aria-labelledby="changes-title" tabindex="0">
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">{{ t("pages.timeline.changes_headline") }}</th>
+            <th scope="col" class="r">{{ first.year - 1 if first.year else t("pages.timeline.changes_before") }}</th>
+            <th scope="col" class="r">{{ first.year if first.year else t("pages.timeline.changes_after") }}</th>
+            <th scope="col" class="r">{{ t("pages.timeline.changes_delta") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {%- for row in changes %}
+          {%- set unit = (" " ~ row.unit) if row.unit and row.unit != "%" else (row.unit or "") %}
+          <tr>
+            <th scope="row">{{ row.label }}</th>
+            <td class="r">{{ row.last_year | number }}{{ unit }}</td>
+            <td class="r">{{ row.this_year | number }}{{ unit }}</td>
+            <td class="r">
+              {%- if row.delta_pct is none %}<span class="delta-none">{{ t("pages.timeline.changes_undefined") }}</span>
+              {%- else %}
+              <span class="delta {{ 'delta-up' if row.delta_pct > 0 else 'delta-down' if row.delta_pct < 0 else '' }}">
+                {%- if row.delta_pct > 0 %}{{ icon("i-up") }}{% elif row.delta_pct < 0 %}{{ icon("i-down") }}{% endif -%}
+                <span class="num">{{ "+" if row.delta_pct > 0 else "" }}{{ row.delta_pct | number }}{{ " pp" if row.delta_unit == "pp" else "%" }}</span>
+              </span>
+              {%- endif %}
+            </td>
+          </tr>
+          {%- endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {%- endif %}
+</div>
+{%- else %}
+{{ slot_gap(trends) }}
+{%- endif %}
+{% endcall %}
+
+{% call section(t("pages.timeline.correlations_title"), "correlations-title", t("pages.timeline.correlations_note")) %}
+<div class="chart-grid">
+  {%- for s in correlations %}
+  {%- if s.card %}
+  <div class="correlation">
+    <p class="correlation-label">{{ icon("i-info") }}<span>{{ t("common.correlation_note") }}</span></p>
+    {{ chart_card(s.card, demo=settings.demo) }}
+  </div>
+  {%- else %}
+  {{ slot_gap(s) }}
+  {%- endif %}
+  {%- endfor %}
+</div>
+{% endcall %}
+
+{%- if extra %}
+{% call section(t("pages.timeline.more_title"), "more-title") %}
+<div class="chart-grid">
+  {%- for c in extra %}
+  {{ chart_card(c, demo=settings.demo, wide=loop.last and loop.length is odd) }}
+  {%- endfor %}
+</div>
+{% endcall %}
+{%- endif %}
+{%- endif %}
+{% endblock %}

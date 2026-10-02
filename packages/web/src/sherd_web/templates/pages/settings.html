@@ -1,0 +1,206 @@
+{#- Settings (routes/settings.py): privacy first, then connectors, the language model and where
+    the data lives. Nothing here changes data except withdrawing a provider's consent. -#}
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, section, empty_state, notice %}
+{% from "macros/icons.html" import icon %}
+{% from "pages/_macros.html" import day %}
+
+{% block title %}Settings{% endblock %}
+
+{% block header %}
+{{ page_header("Settings", t("pages.settings.lede")) }}
+{% endblock %}
+
+{% block content %}
+{%- for problem in problems %}
+{% call notice("warning", "i-warning") %}{{ problem }}{% endcall %}
+{%- endfor %}
+
+{% call section(t("pages.settings.privacy_title"), "privacy-title") %}
+<div class="settings-privacy">
+  <div class="card privacy-card{{ ' privacy-card-sent' if remote_bytes }}">
+    <p class="privacy-counter">
+      <span class="privacy-counter-value">
+        <span class="num privacy-counter-num">{{ remote_bytes | number }}</span>
+        <span>{{ "byte" if remote_bytes == 1 else "bytes" }} {{ t("privacy.counter_label") }}</span>
+      </span>
+      <span class="privacy-counter-since">
+        {%- if remote_bytes %}{{ t("pages.settings.sent_remote", requests=remote_requests | number, providers=remote | length) }}
+        {%- else %}{{ t("pages.settings.sent_none") }}{% endif -%}
+      </span>
+    </p>
+  </div>
+  <ul class="privacy-lines">
+    <li>{{ icon("i-shield") }}<span>{{ t("privacy.no_telemetry") }}</span></li>
+    <li>{{ icon("i-lock") }}<span>{{ t("privacy.local_only") if not remote_bytes else t("pages.settings.remote_line") }}</span></li>
+    {%- if status.choice %}
+    <li>{{ icon("i-info" if status.choice.remote else "i-lock") }}<span>
+      {%- if status.choice.remote %}{{ t("privacy.remote_model", provider=provider_label(status.choice.provider)) }}
+      {%- else %}{{ t("privacy.local_model", provider=provider_label(status.choice.provider)) }}{% endif -%}
+    </span></li>
+    {%- else %}
+    <li>{{ icon("i-info") }}<span>{{ t("privacy.no_model") }}</span></li>
+    {%- endif %}
+  </ul>
+</div>
+{%- if remote %}
+<div class="card settings-table">
+  <h3 class="card-title" id="remote-title">{{ t("pages.settings.remote_title") }}</h3>
+  <div class="chart-table-scroll" role="region" aria-labelledby="remote-title" tabindex="0">
+    <table class="table">
+      <thead><tr>
+        <th scope="col">{{ t("pages.settings.provider") }}</th>
+        <th scope="col" class="r">{{ t("pages.settings.requests") }}</th>
+        <th scope="col" class="r">{{ t("pages.settings.bytes_sent") }}</th>
+        <th scope="col" class="r">{{ t("pages.settings.bytes_received") }}</th>
+        <th scope="col" class="r">{{ t("pages.settings.tokens") }}</th>
+      </tr></thead>
+      <tbody>
+        {%- for u in remote %}
+        <tr>
+          <th scope="row">{{ provider_label(u.name) }}</th>
+          <td class="r">{{ u.requests | number }}</td>
+          <td class="r">{{ u.bytes_sent | number }}</td>
+          <td class="r">{{ u.bytes_received | number }}</td>
+          <td class="r">{{ u.input_tokens | number }} in, {{ u.output_tokens | number }} out</td>
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{%- endif %}
+{%- if local %}
+<div class="card settings-table">
+  <h3 class="card-title" id="local-title">{{ t("pages.settings.local_title") }}</h3>
+  <p class="card-note">{{ t("pages.settings.local_note") }}</p>
+  <div class="chart-table-scroll" role="region" aria-labelledby="local-title" tabindex="0">
+    <table class="table">
+      <thead><tr>
+        <th scope="col">{{ t("pages.settings.provider") }}</th>
+        <th scope="col" class="r">{{ t("pages.settings.requests") }}</th>
+        <th scope="col" class="r">{{ t("pages.settings.bytes_loopback") }}</th>
+      </tr></thead>
+      <tbody>
+        {%- for u in local %}
+        <tr>
+          <th scope="row">{{ provider_label(u.name) }}</th>
+          <td class="r">{{ u.requests | number }}</td>
+          <td class="r">{{ u.bytes_sent | number }}</td>
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{%- endif %}
+{% endcall %}
+
+{% call section(t("pages.settings.connectors_title"), "connectors-title", t("pages.settings.connectors_note")) %}
+{%- if not used %}
+{{ empty_state("settings", size="sm", heading="h3") }}
+{%- endif %}
+<div class="card settings-table">
+  <div class="chart-table-scroll" role="region" aria-label="{{ t('pages.settings.connectors_title') }}, {{ t('pages.settings.table') }}" tabindex="0">
+    <table class="table">
+      <thead><tr>
+        <th scope="col">{{ t("pages.settings.connector") }}</th>
+        <th scope="col">{{ t("pages.settings.version") }}</th>
+        <th scope="col">{{ t("pages.settings.last_import") }}</th>
+        <th scope="col" class="r">{{ t("pages.settings.rows_added") }}</th>
+        <th scope="col">{{ t("pages.settings.timezone") }}</th>
+      </tr></thead>
+      <tbody>
+        {%- for c in connectors %}
+        <tr{% if not c.imports %} class="is-quiet"{% endif %}>
+          <th scope="row">{{ c.name }} <code class="connector-id">{{ c.id }}</code></th>
+          <td>{{ c.version or c.last_version or "" }}</td>
+          {%- if c.imports %}
+          <td>{{ day(c.last_finished) if c.last_finished else "" }}{% if c.imports > 1 %} <span class="muted">· {{ t("pages.settings.imports", count=c.imports) }}</span>{% endif %}</td>
+          <td class="r">{{ c.last_rows | number }}</td>
+          <td>{{ c.last_tz }}</td>
+          {%- else %}
+          <td colspan="3" class="muted">{{ t("pages.settings.not_used") }}</td>
+          {%- endif %}
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endcall %}
+
+{% call section(t("pages.settings.llm_title"), "llm-title", t("pages.settings.llm_note")) %}
+<p class="settings-status">
+  {%- if status.choice %}
+  {{ icon("i-check") }}<span>{{ t("pages.settings.llm_resolved", provider=provider_label(status.choice.provider)) }} <code>{{ status.choice.model }}</code></span>
+  {%- else %}
+  {{ icon("i-info") }}<span>{{ t("pages.settings.llm_none") }}</span>
+  {%- endif %}
+</p>
+<div class="card settings-table">
+  <div class="chart-table-scroll" role="region" aria-label="{{ t('pages.settings.llm_title') }}, {{ t('pages.settings.table') }}" tabindex="0">
+    <table class="table">
+      <thead><tr>
+        <th scope="col">{{ t("pages.settings.provider") }}</th>
+        <th scope="col">{{ t("pages.settings.runs") }}</th>
+        <th scope="col">{{ t("pages.settings.key") }}</th>
+        <th scope="col">{{ t("pages.settings.consent") }}</th>
+      </tr></thead>
+      <tbody>
+        {%- for p in provider_rows %}
+        <tr>
+          <th scope="row">{{ provider_label(p.name) }}</th>
+          <td>{{ t("pages.settings.runs_remote") if p.remote else t("pages.settings.runs_local") }}</td>
+          <td>
+            {%- if p.remote %}
+            <code>{{ p.env }}</code>
+            <span class="key-state key-{{ 'set' if p.key_set else 'unset' }}">{{ icon("i-check" if p.key_set else "i-danger") }}{{ t("pages.settings.key_set") if p.key_set else t("pages.settings.key_unset") }}</span>
+            {%- else %}<span class="muted">{{ t("pages.settings.not_needed") }}</span>{% endif -%}
+          </td>
+          <td>
+            {%- if not p.remote %}<span class="muted">{{ t("pages.settings.not_needed") }}</span>
+            {%- elif p.consented_at %}
+            <form class="consent-revoke" method="post" action="/settings/consent">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="provider" value="{{ p.name }}">
+              <span>{{ t("pages.settings.consent_given", date=p.consented_at[:10]) }}</span>
+              <button class="btn btn-ghost btn-sm" type="submit" aria-label="{{ t('pages.settings.withdraw_label', provider=provider_label(p.name)) }}">{{ t("pages.settings.withdraw") }}</button>
+            </form>
+            {%- else %}<span class="muted">{{ t("pages.settings.consent_none") }}</span>{% endif -%}
+          </td>
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endcall %}
+
+{% call section(t("pages.settings.data_title"), "data-title") %}
+<dl class="card data-list">
+  <div>
+    <dt>{{ t("pages.settings.database") }}</dt>
+    <dd><code>{{ settings.db_path | home_path }}</code>{% if db_size %} <span class="muted num">· {{ db_size }}</span>{% endif %}</dd>
+    <dd class="muted">
+      {%- if db_exists %}{{ icon("i-lock") }}{{ t("pages.settings.read_only") }}
+      {%- else %}{{ t("pages.settings.no_database") }}{% endif -%}
+    </dd>
+    {%- if db_exists %}
+    <dd class="muted">{{ t("privacy.delete_hint") }}</dd>
+    {%- endif %}
+  </div>
+  {%- if settings.demo %}
+  <div>
+    <dt>{{ t("pages.settings.demo_title") }}</dt>
+    <dd>{{ t("pages.settings.demo_body", db_path=default_db | home_path) }}</dd>
+  </div>
+  {%- endif %}
+  <div>
+    <dt>{{ t("pages.settings.home") }}</dt>
+    <dd><code>{{ home | home_path }}</code></dd>
+    <dd class="muted">{{ t("pages.settings.home_files", config=config_path.name, privacy=privacy_path.name) }}</dd>
+  </div>
+</dl>
+{% endcall %}
+{% endblock %}

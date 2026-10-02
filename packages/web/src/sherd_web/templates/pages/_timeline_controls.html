@@ -1,0 +1,62 @@
+{#- The life timeline and the soundtrack, inside the one form that controls them. A plain GET
+    form; HTMX replaces the whole form when a grouping is picked or a range is applied. -#}
+{% from "macros/components.html" import chart_card %}
+{% from "macros/icons.html" import icon %}
+{% from "pages/_macros.html" import date_field, slot_gap, problems_notice %}
+
+<form class="timeline-controls" id="{{ controls_id }}" method="get" action="/timeline"
+      aria-label="{{ t('pages.timeline.controls_label') }}"
+      hx-get="/timeline" hx-target="this" hx-swap="outerHTML"
+      hx-trigger="submit, change from:find .segmented" hx-push-url="true" hx-history="false"
+      hx-sync="this:replace" hx-indicator="this"
+      data-granularity="{{ granularity }}"
+      data-date-from="{{ range.date_from.isoformat() if range.date_from else '' }}"
+      data-date-to="{{ range.date_to.isoformat() if range.date_to else '' }}" data-tz="{{ tz }}">
+  {{ problems_notice(problems) }}
+
+  <section class="section" aria-labelledby="life-title">
+    <div class="section-head section-head-split">
+      <div>
+        <h2 id="life-title">{{ t("pages.timeline.life_title") }}</h2>
+        <p>{{ t("pages.timeline.life_note") }}</p>
+      </div>
+      <fieldset class="segmented">
+        <legend class="sr-only">{{ t("pages.filters.group") }}</legend>
+        {%- for g in granularities %}
+        <label class="segment">
+          <input type="radio" name="granularity" value="{{ g }}" id="granularity-{{ g }}"{% if g == granularity %} checked{% endif %}>
+          <span>{{ t("pages.filters.by_" ~ g) }}</span>
+        </label>
+        {%- endfor %}
+        <noscript><button class="btn btn-secondary btn-sm" type="submit">{{ t("pages.filters.apply") }}</button></noscript>
+      </fieldset>
+    </div>
+    {%- if life.card %}
+    {{ chart_card(life.card, demo=settings.demo, wide=True) }}
+    {%- else %}
+    {{ slot_gap(life) }}
+    {%- endif %}
+  </section>
+
+  <section class="section" aria-labelledby="soundtrack-title">
+    <div class="section-head">
+      <h2 id="soundtrack-title">{{ t("pages.timeline.soundtrack_title") }}</h2>
+      <p>{{ t("pages.timeline.soundtrack_note") }}</p>
+    </div>
+    <div class="filters filters-inline">
+      <div class="filters-fields">
+        {{ date_field("date_from", t("pages.filters.from"), range.date_from, span) }}
+        {{ date_field("date_to", t("pages.filters.to"), range.date_to, span) }}
+      </div>
+      <div class="filters-actions">
+        <button class="btn btn-primary" type="submit">{{ t("pages.timeline.soundtrack_apply") }}</button>
+        <a class="btn btn-ghost" href="/timeline{{ '?granularity=' ~ granularity if granularity != 'month' }}">{{ t("pages.filters.reset") }}</a>
+      </div>
+    </div>
+    {%- if soundtrack.card %}
+    {{ chart_card(soundtrack.card, demo=settings.demo, wide=True) }}
+    {%- else %}
+    {{ slot_gap(soundtrack) }}
+    {%- endif %}
+  </section>
+</form>

@@ -1,0 +1,76 @@
+{#- Ask (routes/ask.py): a question box; the SQL comes first in every answer. -#}
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, empty_state, command %}
+{% from "macros/icons.html" import icon %}
+
+{% block title %}Ask{% endblock %}
+
+{% block header %}
+{{ page_header("Ask", None if empty else t("pages.ask.lede")) }}
+{% endblock %}
+
+{% block content %}
+{%- if empty %}
+{% call empty_state("ask") %}
+<div class="empty-command">
+  <p class="label">{{ t("empty.ask.secondary") }}</p>
+  {{ command("cmd-demo-ask", "sherd demo && sherd web --demo") }}
+</div>
+{% endcall %}
+{%- elif view.status.no_provider and not view.question %}
+{% call empty_state("ask_no_model") %}
+<div class="model-options">
+  <section class="model-option" aria-labelledby="ollama-title">
+    <h3 id="ollama-title">{{ icon("i-lock") }}{{ t("pages.ask.ollama_title") }}</h3>
+    <p>{{ t("pages.ask.ollama_body") }}</p>
+    {{ command("cmd-ollama", "ollama pull " ~ ollama_model) }}
+  </section>
+  <section class="model-option" aria-labelledby="key-title">
+    <h3 id="key-title">{{ icon("i-info") }}{{ t("pages.ask.key_title") }}</h3>
+    <p>{{ t("pages.ask.key_body") }}</p>
+    {{ command("cmd-key", t("pages.ask.key_command")) }}
+  </section>
+</div>
+{% endcall %}
+{%- else %}
+<form class="ask-form card" method="post" action="/ask"
+      hx-post="/ask" hx-target="#{{ result_id }}" hx-swap="outerHTML"
+      hx-disabled-elt="find button[type=submit]" hx-indicator="this" hx-sync="this:replace">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label class="field ask-field">
+    <span class="label">{{ t("pages.ask.question_label") }}</span>
+    <textarea class="input textarea" name="question" rows="3" maxlength="{{ question_limit }}"
+              placeholder="{{ examples[0] }}" required>{{ view.question }}</textarea>
+  </label>
+  <div class="ask-bar">
+    <label class="switch">
+      <input type="checkbox" name="offline" value="on"{% if view.offline %} checked{% endif %} aria-describedby="offline-hint">
+      <span class="switch-track" aria-hidden="true"></span>
+      <span class="switch-label">{{ t("pages.ask.offline_label") }}</span>
+    </label>
+    <button class="btn btn-primary ask-submit" type="submit">
+      {{ icon("i-ask") }}<span class="when-idle">{{ t("pages.ask.submit") }}</span><span class="when-busy" aria-hidden="true">{{ t("common.loading") }}</span>
+    </button>
+  </div>
+  <p class="hint" id="offline-hint">{{ t("pages.ask.offline_hint") }}</p>
+  {%- set choice = view.status.choice %}
+  {%- if choice %}
+  <p class="ask-provider{{ ' ask-provider-remote' if choice.remote }}">
+    {{ icon("i-info" if choice.remote else "i-lock") }}
+    <span>
+      {%- if choice.remote %}{{ t("privacy.remote_model", provider=provider_label(choice.provider)) }} {{ t("pages.ask.remote_first_time") if not view.status.consented }}
+      {%- else %}{{ t("privacy.local_model", provider=provider_label(choice.provider)) }}{% endif %}
+      <span class="ask-model">{{ choice.model }}</span>
+    </span>
+  </p>
+  {%- endif %}
+  <div class="ask-examples" role="group" aria-labelledby="examples-label">
+    <span class="label" id="examples-label">{{ t("pages.ask.examples_label") }}</span>
+    {%- for example in examples %}
+    <button class="chip" type="submit" name="example" value="{{ example }}" formnovalidate>{{ example }}</button>
+    {%- endfor %}
+  </div>
+</form>
+{% include "pages/_ask_result.html" %}
+{%- endif %}
+{% endblock %}

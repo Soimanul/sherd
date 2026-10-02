@@ -1,0 +1,43 @@
+{#- The part of a domain page the filter bar replaces. The data-* attributes are the dig
+    params the cards were computed with. With `oob`, it also refreshes the status line. -#}
+{% from "macros/components.html" import section, ledger, chart_card, empty_state %}
+{% from "pages/_macros.html" import filter_status, dig_gap, failed_notice, problems_notice %}
+{%- set currency = filters.currency or (currencies[0] if currencies else None) %}
+<div class="dig-results" id="{{ results_id }}"
+     data-date-from="{{ filters.date_from.isoformat() if filters.date_from else '' }}"
+     data-date-to="{{ filters.date_to.isoformat() if filters.date_to else '' }}"
+     data-top-n="{{ filters.top_n }}" data-granularity="{{ filters.granularity }}"
+     data-currency="{{ currency or '' }}" data-tz="{{ tz }}">
+  {{ problems_notice(filters.problems) }}
+  {{ failed_notice(failed) }}
+  {%- if nothing_in_range %}
+  {% call empty_state("no_results", {"date_from": filters.date_from.isoformat() if filters.date_from else "the start", "date_to": filters.date_to.isoformat() if filters.date_to else "today"}, size="sm") %}
+  <div class="empty-actions">
+    <a class="btn btn-secondary" href="{{ domain.path }}">{{ t("empty.no_results.action") }}</a>
+  </div>
+  {% endcall %}
+  {%- else %}
+  {%- if tiles %}
+  {% call section(t("pages.charts.headlines"), name ~ "-headlines") %}
+  {{ ledger(tiles, t("pages.charts.headlines")) }}
+  {% endcall %}
+  {%- endif %}
+  {% call section(t("pages.charts.title"), name ~ "-charts", t("pages.charts.note", count=placed | length)) %}
+  <div class="chart-grid">
+    {%- for p in placed %}
+    {{ chart_card(p.card, demo=settings.demo, wide=p.wide) }}
+    {%- endfor %}
+  </div>
+  {% endcall %}
+  {%- endif %}
+  {%- if waiting %}
+  <div class="dig-gaps">
+    {%- for dig in waiting %}
+    {{ dig_gap(dig, "unavailable") }}
+    {%- endfor %}
+  </div>
+  {%- endif %}
+</div>
+{%- if oob %}
+{{ filter_status(filters, currency, oob=True) }}
+{%- endif %}

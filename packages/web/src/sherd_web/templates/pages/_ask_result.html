@@ -1,0 +1,128 @@
+{#- The result of one question: the query first (SQL, or the insight and its params), then the
+    row count, the answer, the chart and a table preview. Also holds the consent card, notices
+    and errors. HTMX swaps this region; app.js moves focus to its [data-focus] heading. -#}
+{% from "macros/components.html" import chart_card, notice %}
+{% from "macros/icons.html" import icon %}
+
+{% macro sql_block(view, label) -%}
+<div class="sql" x-data="copyable">
+  <div class="sql-head">
+    <span>{{ label }}</span>
+    <button class="btn btn-ghost btn-sm" type="button" data-copy-target="ask-query-text"
+            data-label="{{ t('common.copy_sql') if view.sql is not none else t('pages.ask.copy_query') }}" data-done="{{ t('common.copied') }}" x-on:click="copy">
+      {{ icon("i-copy") }}<span x-text="label">{{ t("common.copy_sql") if view.sql is not none else t("pages.ask.copy_query") }}</span>
+    </button>
+  </div>
+  {%- if view.sql is not none %}
+  <pre id="ask-query-text">{% for kind, text in view.sql %}{% if kind %}<span class="{{ kind }}">{{ text }}</span>{% else %}{{ text }}{% endif %}{% endfor %}</pre>
+  {%- else %}
+  <pre id="ask-query-text"><span class="k">dig</span> {{ view.dig }} <span class="s">{{ view.params }}</span></pre>
+  {%- endif %}
+</div>
+{%- endmacro %}
+
+<div class="ask-result" id="{{ result_id }}">
+  {%- if view.status.refused %}
+  {% call notice("warning", "i-warning") %}<strong>{{ t("pages.ask.offline_refused_title") }}</strong> {{ t("pages.ask.offline_refused", reason=view.status.refused) }}{% endcall %}
+  {%- elif view.status.no_provider and view.question %}
+  {% call notice("warning", "i-warning") %}<strong>{{ t("pages.ask.no_provider_title") }}</strong> {{ t("pages.ask.offline_no_local" if view.offline else "pages.ask.no_provider") }}{% endcall %}
+  {%- endif %}
+
+  {%- if view.cancelled %}
+  {% call notice("info", "i-info") %}{{ t("pages.ask.cancelled") }}{% endcall %}
+  {%- endif %}
+
+  {%- if view.consent %}
+  {%- set c = view.consent %}
+  {%- set name = provider_label(c.provider) %}
+  <section class="card consent" aria-labelledby="consent-title">
+    <div class="consent-head">
+      {{ icon("i-shield") }}
+      <h2 id="consent-title" tabindex="-1" data-focus>{{ t("pages.ask.consent.title", provider=name) }}</h2>
+    </div>
+    <p class="consent-body">{{ t("pages.ask.consent.body", provider=name, model=c.model) }}</p>
+    <h3 class="consent-subtitle">{{ t("pages.ask.consent.first_request") }}</h3>
+    <ul class="consent-list">
+      <li>{{ icon("i-check") }}<span>{{ t("pages.ask.consent.question") }} <q>{{ c.question }}</q></span></li>
+      <li>{{ icon("i-check") }}<span>{{ t("pages.ask.consent.catalog") }}</span></li>
+      <li>{{ icon("i-check") }}<span>{{ t("pages.ask.consent.digs", count=c.digs) }}</span></li>
+    </ul>
+    <h3 class="consent-subtitle">{{ t("pages.ask.consent.second_request") }}</h3>
+    <ul class="consent-list">
+      <li>{{ icon("i-check") }}<span>{{ t("pages.ask.consent.rows", rows=c.rows, kilobytes=c.kilobytes, cell_chars=c.cell_chars) }}</span></li>
+    </ul>
+    <details class="consent-prompt">
+      <summary>{{ icon("i-chevron") }}{{ t("pages.ask.consent.exact") }} <span class="chart-table-count num">{{ t("pages.ask.consent.size", count=c.prompt | length | number) }}</span></summary>
+      <pre tabindex="0">{{ c.prompt }}</pre>
+    </details>
+    <form class="consent-actions" method="post" action="/ask"
+          hx-post="/ask" hx-target="#{{ result_id }}" hx-swap="outerHTML" hx-disabled-elt="find button">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="question" value="{{ c.question }}">
+      <input type="hidden" name="provider" value="{{ c.provider }}">
+      {%- if view.offline %}<input type="hidden" name="offline" value="on">{% endif %}
+      <button class="btn btn-primary" type="submit" name="consent" value="allow">{{ icon("i-check") }}<span>{{ t("pages.ask.consent.allow", provider=name) }}</span></button>
+      <button class="btn btn-secondary" type="submit" name="consent" value="cancel">{{ t("common.cancel") }}</button>
+    </form>
+    <p class="hint">{{ t("pages.ask.consent.keys") }}</p>
+  </section>
+  {%- endif %}
+
+  {%- if view.error %}
+  <section class="ask-answer" aria-labelledby="ask-error-title">
+    <h2 class="sr-only" id="ask-error-title" tabindex="-1" data-focus>{{ t("pages.ask.error_title") }}</h2>
+    {% call notice(view.error_kind, "i-danger" if view.error_kind == "danger" else "i-warning") %}{{ view.error }}{% endcall %}
+    {%- if view.sql is not none %}
+    {{ sql_block(view, t("pages.ask.sql_label_failed")) }}
+    {%- endif %}
+  </section>
+  {%- endif %}
+
+  {%- if view.refusal is not none %}
+  <section class="ask-answer" aria-labelledby="ask-answer-title">
+    <h2 class="ask-question" id="ask-answer-title" tabindex="-1" data-focus><span class="sr-only">{{ t("pages.ask.asked") }} </span>{{ view.question }}</h2>
+    {% call notice("info", "i-info") %}<strong>{{ t("pages.ask.refused_title") }}</strong> {{ view.refusal }}{% endcall %}
+  </section>
+  {%- endif %}
+
+  {%- if view.has_result and not view.error %}
+  <section class="ask-answer" aria-labelledby="ask-answer-title">
+    <h2 class="ask-question" id="ask-answer-title" tabindex="-1" data-focus><span class="sr-only">{{ t("pages.ask.asked") }} </span>{{ view.question }}</h2>
+    {{ sql_block(view, t("pages.ask.sql_label") if view.sql is not none else t("pages.ask.dig_label")) }}
+    <p class="ask-meta">
+      <span class="num">{{ t("common.rows_one") if view.row_count == 1 else t("common.rows", count=view.row_count | number) }}</span>
+      {%- if view.truncated %}<span>{{ t("pages.ask.truncated", limit=row_budget | number) }}</span>{% endif %}
+      <span>{{ provider_label(view.provider) }} · {{ view.model }}</span>
+      {%- if view.usage %}<span class="num">{{ t("pages.ask.usage", bytes=view.usage.bytes_sent | number, requests=view.usage.requests, tokens_in=view.usage.input_tokens | number, tokens_out=view.usage.output_tokens | number) }}</span>{% endif %}
+    </p>
+    <div class="ask-text">
+      {%- for paragraph in view.answer.split("\n\n") if paragraph.strip() %}
+      <p>{{ paragraph }}</p>
+      {%- endfor %}
+    </div>
+    {%- if view.chart %}
+    {{ chart_card(view.chart, wide=True) }}
+    {%- endif %}
+    {%- if view.columns %}
+    <div class="card ask-table">
+      <h3 class="card-title" id="ask-table-title">{{ t("pages.ask.table_title") }}</h3>
+      <div class="chart-table-scroll table-full" role="region" aria-labelledby="ask-table-title" tabindex="0">
+        <table class="table">
+          <thead>
+            <tr>{% for name, numeric in view.columns %}<th scope="col"{% if numeric %} class="r"{% endif %}>{{ name }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            {%- for row in view.rows %}
+            <tr>{% for value in row %}{% set column = view.columns[loop.index0] %}<td{% if column[1] %} class="r"{% endif %}>{{ value | cell(column[0]) }}</td>{% endfor %}</tr>
+            {%- endfor %}
+          </tbody>
+        </table>
+      </div>
+      {%- if view.row_count > view.rows | length %}
+      <p class="chart-table-note">{{ t("pages.ask.preview_note", shown=view.rows | length, count=view.row_count | number) }}</p>
+      {%- endif %}
+    </div>
+    {%- endif %}
+  </section>
+  {%- endif %}
+</div>

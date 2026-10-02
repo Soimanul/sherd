@@ -130,3 +130,49 @@
     }));
   });
 })();
+
+/*
+ * Pages (WP-15): charts in HTMX swaps, and focus. When HTMX swaps in an Ask answer or
+ * consent card, focus moves to its heading so keyboard and screen-reader users land on what
+ * just arrived. Filter swaps keep focus where it was (HTMX restores it to the control by id).
+ */
+(() => {
+  "use strict";
+
+  /* htmx runs with allowScriptTags: false, so it drops every <script> from swapped HTML,
+     including the inert JSON blocks that hold chart specs. Read them from the response
+     before the swap and put them back, still inert, before the shell draws charts. */
+  let pendingSpecs = [];
+
+  document.addEventListener("htmx:beforeSwap", (event) => {
+    pendingSpecs = [];
+    const text = event.detail.serverResponse;
+    if (!event.detail.shouldSwap || typeof text !== "string" || !text.includes("application/json")) {
+      return;
+    }
+    const parsed = new DOMParser().parseFromString(text, "text/html");
+    parsed.querySelectorAll('script[type="application/json"][id]').forEach((block) => {
+      pendingSpecs.push({ id: block.id, json: block.textContent });
+    });
+  });
+
+  document.addEventListener("htmx:afterSwap", () => {
+    pendingSpecs.forEach(({ id, json }) => {
+      const chart = document.querySelector(`[data-chart="${CSS.escape(id)}"]`);
+      if (!chart || document.getElementById(id)) return;
+      const block = document.createElement("script");
+      block.type = "application/json";
+      block.id = id;
+      block.textContent = json;
+      chart.after(block);
+    });
+    pendingSpecs = [];
+  });
+
+  document.addEventListener("htmx:afterSettle", (event) => {
+    const root = event.target;
+    if (!(root instanceof Element)) return;
+    const heading = root.matches("[data-focus]") ? root : root.querySelector("[data-focus]");
+    if (heading) heading.focus({ preventScroll: false });
+  });
+})();

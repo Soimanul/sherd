@@ -78,6 +78,12 @@ empty:
     title: This chart needs {table}.
     body: It reads from {table}, which has no rows yet. Dig an export that contains {source_kind} to fill it.
     action: Start a dig
+  dig_missing:
+    title: This part isn't in this version of sherd.
+    body: No installed insight has the id {dig_id}. The rest of the page works without it.
+  dig_failed:
+    title: "{title} could not be computed."
+    body: The other charts are unaffected. Details are in the terminal that runs sherd web.
 
 # --- First-run onboarding ----------------------------------------------------
 onboarding:
@@ -175,3 +181,162 @@ errors:
   query_refused: That question would change data, and Ask is read-only. Rephrase it as a question.
   model_unreachable: Couldn't reach {provider}. Check that it is running, or switch provider in Settings.
   export_failed: Couldn't write {path}. Check that the folder exists and is writable.
+
+# --- Pages (WP-15) -----------------------------------------------------------
+pages:
+  filters:
+    label: Filter {page}
+    from: From
+    to: To
+    top: Top
+    group: Group by
+    by_day: Day
+    by_week: Week
+    by_month: Month
+    by_year: Year
+    currency: Currency
+    currency_default: "{currency}, the most used"
+    apply: Apply
+    reset: Whole range
+    whole_range: the whole range
+    status: Showing {range}, grouped by {granularity}, top {top_n}.
+    status_currency: Amounts in {currency}.
+  charts:
+    headlines: Headlines
+    title: Charts
+    note: "{count} charts. Each one has a table behind it."
+    failed_one: "1 chart could not be computed: {names}. Details are in the terminal that runs sherd web."
+    failed: "{count} charts could not be computed: {names}. Details are in the terminal that runs sherd web."
+  messages:
+    lede: Who you talk to, when, and how quickly you reply, from {rows} messages.
+    rows: messages
+    command: sherd dig ~/Downloads/WhatsApp-Chat.zip
+  music:
+    lede: What you play, when you play it, and what you skip, from {rows} plays.
+    rows: plays
+    command: sherd dig ~/Downloads/my_spotify_data.zip
+  money:
+    lede: Where the money goes, what repeats, and what is left, from {rows} transactions.
+    rows: transactions
+    command: sherd dig ~/Downloads/statement.csv
+  timeline:
+    lede: Every source on one axis, the music of any stretch of time, and what changed from one year to the next.
+    scale: "{count} sources"
+    command: sherd dig ~/Downloads/export.zip
+    controls_label: Timeline grouping and soundtrack range
+    life_title: All sources, one axis
+    life_note: Each band is one source; darker cells are its busier periods.
+    soundtrack_title: Pick a period
+    soundtrack_note: Choose dates, and the tracks you played most in them appear below. Without dates, it shows the latest month.
+    soundtrack_apply: Show this period
+    trends_title: Year over year
+    trends_note: Each headline from the other pages, last full year against the one before.
+    changes_title: Headline changes
+    changes_headline: Headline
+    changes_before: Year before
+    changes_after: Last year
+    changes_delta: Change
+    changes_note: Percentages change by percentage points (pp); everything else by percent.
+    changes_undefined: No baseline
+    correlations_title: Correlations
+    correlations_note: Two things that move together, week by week. Moving together is not the same as one causing the other.
+    more_title: More across sources
+  ask:
+    lede: Ask in plain words. sherd writes read-only SQL over your own tables and shows it before the answer.
+    question_label: Your question
+    submit: Ask
+    examples_label: Or try
+    offline_label: Offline
+    offline_hint: Offline uses only a model on this machine for this question, and blocks every network connection except loopback while it runs.
+    remote_first_time: Before the first question goes, this page shows what will be sent.
+    ollama_title: On this machine, with Ollama
+    ollama_body: Install Ollama from ollama.com, pull a model, then reload this page. Questions never leave this machine.
+    key_title: With a remote provider
+    key_body: Set ANTHROPIC_API_KEY or OPENAI_API_KEY in the terminal, then restart sherd web. You see what would be sent, and allow it, before anything goes.
+    key_command: ANTHROPIC_API_KEY=your-key sherd web
+    no_provider_title: No model to ask.
+    no_provider: Ask needs Ollama running on this machine, or an API key for a remote provider.
+    offline_no_local: Offline mode only uses a model on this machine, and none is running. Start Ollama, or ask without Offline.
+    offline_refused_title: Nothing was sent.
+    offline_refused: "Offline mode refuses remote providers ({reason}). Turn Offline off, or set up Ollama."
+    cancelled: Nothing was sent. Your question is still in the box.
+    no_question: Type a question first.
+    too_long: Questions can be up to {limit} characters.
+    failed: "That question could not be answered: {reason}"
+    provider_failed: "The model could not be reached: {reason}"
+    error_title: The question could not be answered
+    refused_title: Not answerable from your data.
+    asked: You asked
+    sql_label: SQL · read-only, sandboxed
+    sql_label_failed: The last query tried
+    dig_label: Insight · read-only
+    copy_query: Copy query
+    truncated: (stopped at the {limit}-row budget)
+    usage: "{bytes} bytes sent in {requests} requests · {tokens_in} tokens in, {tokens_out} out"
+    chart_title: Chart of the result
+    chart_narrative: The rows below, drawn.
+    chart_summary: "A chart of {columns} over {count} rows; the table below holds the values."
+    table_title: Rows
+    preview_note: First {shown} of {count} rows.
+    consent:
+      title: Send this question to {provider}?
+      body: "{provider} ({model}) is a remote service. Answering takes two requests, and nothing goes until you allow it. sherd remembers your answer for {provider}; you can withdraw it in Settings."
+      first_request: The first request sends
+      question: "Your question:"
+      catalog: Your database's catalog, meaning table and column descriptions, row counts and date ranges. No rows.
+      digs: The list of the {count} insights sherd can run.
+      second_request: The second request sends
+      rows: The query, its row count and at most {rows} result rows, as no more than {kilobytes} KB of CSV, with each cell cut to {cell_chars} characters.
+      exact: The exact first request
+      size: "{count} characters"
+      allow: Allow {provider} and ask
+      keys: API keys are read from the environment and never stored.
+  settings:
+    lede: What sherd reads, what it may send, and where it keeps it.
+    privacy_title: Privacy
+    sent_none: Nothing has gone to a remote service from this machine.
+    sent_remote: "To remote providers, in {requests} requests. The breakdown is below."
+    remote_line: Dashboards and imports stay on this machine. Only questions asked with a remote provider leave it.
+    remote_title: Sent to remote providers
+    local_title: On this machine
+    local_note: Local models are reached over loopback; these bytes never leave the machine.
+    provider: Provider
+    requests: Requests
+    bytes_sent: Bytes sent
+    bytes_received: Bytes received
+    bytes_loopback: Bytes over loopback
+    tokens: Tokens
+    connectors_title: Connectors
+    table: table
+    connectors_note: The importers this sherd knows, and the last time each one added rows.
+    connector: Connector
+    version: Version
+    last_import: Last import
+    rows_added: Rows added
+    timezone: Time zone
+    imports: "{count} imports"
+    not_used: Not used yet
+    llm_title: Language model
+    llm_note: Used by Ask only. The dashboards need no model.
+    llm_resolved: Ask uses {provider} with
+    llm_none: No model is set up. Ask shows how to add one.
+    runs: Runs
+    runs_local: On this machine
+    runs_remote: Remote
+    key: API key
+    key_set: set
+    key_unset: not set
+    not_needed: Not needed
+    consent: Consent
+    consent_given: Allowed on {date}
+    consent_none: Not given
+    withdraw: Withdraw
+    withdraw_label: Withdraw consent for {provider}
+    data_title: Your data
+    database: Database
+    read_only: sherd web opened it read-only. Nothing on these pages changes it.
+    no_database: No database here yet. Start a dig to create it.
+    demo_title: Demo mode
+    demo_body: This is the demo database of made-up people and payments. Your own data, once dug, lives in {db_path}.
+    home: sherd's folder
+    home_files: "Also holds {config} (provider choice and consent) and {privacy} (the counter above)."

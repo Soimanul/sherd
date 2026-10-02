@@ -1,0 +1,2 @@
+{"kind": "shell.command", "meta": {"cwd": "~/project", "duration_ms": 1500.0, "exit": 0, "shell": "atuin"}, "source_file": "history.db", "source_row_id": "synthetic-a", "table": "events", "title": "git status", "ts": "2024-01-01T00:00:00.123456Z", "url": null}
+{"kind": "shell.command", "meta": {"cwd": "/tmp/project", "duration_ms": 2.0, "exit": 1, "shell": "atuin"}, "source_file": "history.db", "source_row_id": "synthetic-b", "table": "events", "title": "tool --token=«redacted»", "ts": "2024-01-01T00:00:01Z", "url": null}

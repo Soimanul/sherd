@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -23,7 +24,7 @@ def seed(store: Store) -> None:
                     chat_id="direct",
                     chat_kind="direct",
                     sender_id="whatsapp:+15550101",
-                    sender_name="Ana",
+                    sender_name="Ana Pop",
                     is_from_me=False,
                     kind="text",
                 )
@@ -40,11 +41,30 @@ def seed(store: Store) -> None:
                     currency="RON",
                     account="demo",
                     kind="transfer",
-                    counterparty="Ana Pop",
+                    counterparty="Ana",
                 )
             ],
         ),
     ]
+    batches.append(
+        (
+            "synthetic",
+            [
+                Message(
+                    source_file="synthetic",
+                    source_row_id=f"filler-{i}",
+                    ts=stamp,
+                    chat_id="group",
+                    chat_kind="group",
+                    sender_id=f"synthetic:{i}",
+                    sender_name=f"Filler{i}",
+                    is_from_me=False,
+                    kind="text",
+                )
+                for i in range(40)
+            ],
+        )
+    )
     for source, rows in batches:
         imp = store.begin_import(source, "1", "synthetic", "UTC")
         store.upsert(imp, source, rows)
@@ -64,16 +84,23 @@ def test_list_proposals_reject_merge_resolve(tmp_path: Path) -> None:
     assert "1 proposals" in invoke(path, "resolve")
     assert "Ana" in invoke(path)
     assert "0.70" in invoke(path, "proposals")
-    assert "0 proposals" in invoke(path, "reject", "whatsapp:+15550101", "bank:name:ana pop")
+    assert "0 automatic merges" in invoke(path, "resolve")
+    assert "0 proposals" in invoke(path, "reject", "whatsapp:+15550101", "bank:name:ana")
     assert "0 proposals" in invoke(path, "proposals")
     with Store.open(path) as store:
-        ids = [r["id"] for r in store.query("SELECT id FROM contacts").to_pylist()]
+        ids = [
+            r["id"]
+            for r in store.query(
+                "SELECT id FROM contacts WHERE list_contains(sources, 'whatsapp') "
+                "OR list_contains(sources, 'bank_csv')"
+            ).to_pylist()
+        ]
     assert "0 proposals" in invoke(path, "merge", *ids)
     assert "0 automatic merges" in invoke(path, "resolve")
     with Store.open(path) as store:
         assert store.query(
             "SELECT count(*) AS n FROM contacts WHERE merged_into IS NULL"
-        ).to_pylist() == [{"n": 1}]
+        ).to_pylist() == [{"n": 41}]
 
 
 def test_demo_and_invalid_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -138,3 +165,15 @@ def test_message_digs_work_after_resolution(tmp_path: Path) -> None:
             result = insight.compute(store, DigParams())
             assert result.data.num_rows > 0, insight.id
             assert result.text_summary
+            if "contact" in result.data.column_names:
+                labels = result.data["contact"].to_pylist()
+                assert all(
+                    isinstance(label, str) and not re.fullmatch(r"[0-9a-f]{32}", label)
+                    for label in labels
+                ), insight.id
+                assert set(labels) <= {
+                    r["display_name"]
+                    for r in store.query("SELECT display_name FROM contacts").to_pylist()
+                }, insight.id
+            assert not re.search(r"\b[0-9a-f]{32}\b", str(result.chart)), insight.id
+            assert not re.search(r"\b[0-9a-f]{32}\b", result.narrative), insight.id

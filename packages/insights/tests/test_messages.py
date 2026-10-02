@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pyarrow as pa
 import pytest
@@ -32,10 +32,10 @@ def test_volume_both_directions_top_contact_and_inclusive_local_range(store: Sto
         DigParams(date(2024, 2, 1), date(2024, 2, 1), 1, "day", "Europe/Bucharest"),
     )
     assert got.data.to_pylist() == [
-        {"contact": "resolved", "bucket": date(2024, 2, 1), "messages": 2}
+        {"contact": "Contact A", "bucket": date(2024, 2, 1), "messages": 2}
     ]
     assert got.headline
-    assert (got.headline.label, got.headline.value) == ("resolved", 2)
+    assert (got.headline.label, got.headline.value) == ("Contact A", 2)
 
 
 def test_yearly_ranks_and_rise(store: Store) -> None:
@@ -339,3 +339,70 @@ def test_emoji_counts_across_bounded_reads(store: Store, monkeypatch: pytest.Mon
     assert got.headline
     assert got.headline.value == "⭐"
     assert "2,050" in got.narrative
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        "volume_by_contact",
+        "top_contacts_by_year",
+        "response_times",
+        "conversation_starters",
+        "streaks_silences",
+    ],
+)
+def test_contact_labels_follow_merge_chain_and_group_by_identity(store: Store, metric: str) -> None:
+    stamp = datetime(2024, 1, 1, tzinfo=UTC)
+    root, other, middle, oldest = [str(i) * 32 for i in range(1, 5)]
+    store.replace_contacts(
+        [
+            dict(
+                id=cid,
+                display_name=label,
+                aliases=[],
+                identities=[],
+                sources=[],
+                merged_into=target,
+                created_at=stamp,
+                updated_at=stamp,
+            )
+            for cid, label, target in (
+                (root, "Synthetic Name", None),
+                (other, "Synthetic Name", None),
+                (middle, "Previous Name", root),
+                (oldest, "Oldest Name", middle),
+            )
+        ]
+    )
+    insert(
+        store,
+        [
+            message(
+                "chain-in",
+                "2024-01-01T00:00:00+00:00",
+                me=False,
+                contact="old chat",
+                contact_id=oldest,
+            ),
+            message(
+                "chain-out", "2024-01-01T00:01:00+00:00", contact="old chat", contact_id=middle
+            ),
+            message(
+                "other-in",
+                "2024-01-01T00:00:00+00:00",
+                me=False,
+                contact="other chat",
+                contact_id=other,
+            ),
+            message(
+                "other-out", "2024-01-01T00:01:00+00:00", contact="other chat", contact_id=other
+            ),
+        ],
+    )
+    got = compute(store, metric)
+    assert got.data.num_rows == 2
+    assert got.data["contact"].to_pylist() == ["Synthetic Name", "Synthetic Name"]
+    assert "Previous Name" not in got.narrative
+    assert "Oldest Name" not in got.narrative
+    if metric == "volume_by_contact":
+        assert got.data["messages"].to_pylist() == [2, 2]

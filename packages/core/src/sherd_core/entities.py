@@ -3,7 +3,7 @@
 import re
 import unicodedata
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
@@ -32,7 +32,11 @@ def normalise_phone(value: str) -> str | None:
 
 
 def score(a: str, b: str) -> float:
-    """Return the decided name/phone score; zero means no candidate."""
+    """Phone/exact name: 1; token set: .95; subset: .70; fuzzy: .85-.94.
+
+    Only phone, exact-normalised and token-set matches can auto-merge.
+    Fuzzy ratios are capped at .94 and always require confirmation.
+    """
     phone_a, phone_b = normalise_phone(a), normalise_phone(b)
     if phone_a or phone_b:
         return 1.0 if phone_a and phone_a == phone_b else 0.0
@@ -47,7 +51,7 @@ def score(a: str, b: str) -> float:
     if ta < tb or tb < ta:
         return 0.70
     ratio = SequenceMatcher(None, " ".join(sorted(ta)), " ".join(sorted(tb))).ratio()
-    return ratio if ratio >= 0.85 else 0.0
+    return min(ratio, 0.94) if ratio >= 0.85 else 0.0
 
 
 @dataclass(frozen=True)
@@ -70,6 +74,28 @@ class _Identity:
     names: Counter[str] = field(default_factory=Counter)
     whatsapp_names: Counter[str] = field(default_factory=Counter)
     sources: set[str] = field(default_factory=set)
+
+
+def _candidate_pairs(identities: dict[str, _Identity]) -> list[tuple[str, str]]:
+    """Block by phone, full name and rare name tokens before fuzzy scoring."""
+    phones: dict[str, set[str]] = defaultdict(set)
+    names: dict[str, set[str]] = defaultdict(set)
+    tokens: dict[str, set[str]] = defaultdict(set)
+    for key, identity in identities.items():
+        phone = normalise_phone(key)
+        if phone:
+            phones[phone].add(key)
+        for name in identity.names:
+            normal = normalise_name(name)
+            if normal:
+                names[" ".join(sorted(set(normal.split())))].add(key)
+                for token in set(normal.split()):
+                    if len(token) >= 2:
+                        tokens[token].add(key)
+    blocks = [*phones.values(), *names.values()]
+    blocks.extend(block for block in tokens.values() if len(block) <= len(identities) * 0.05)
+    pairs = {pair for block in blocks for pair in combinations(sorted(block), 2)}
+    return sorted(pairs)
 
 
 def resolve(store: Store) -> ResolveReport:
@@ -129,7 +155,7 @@ def resolve(store: Store) -> ResolveReport:
         if decision == "merge" and a in identities and b in identities:
             join(a, b, confirmed=True)
     candidates: list[Proposal] = []
-    for a, b in combinations(sorted(identities), 2):
+    for a, b in _candidate_pairs(identities):
         if decisions.get((a, b)) == "reject":
             continue
         value = max(
@@ -141,17 +167,21 @@ def resolve(store: Store) -> ResolveReport:
     old = store.query("SELECT * FROM contacts").to_pylist()
     old_by_id = {r["id"]: r for r in old}
     old_owner = {key: r["id"] for r in old if r["merged_into"] is None for key in r["identities"]}
+    # Previously co-owned identities form one accounting component, even while the
+    # rebuilt clusters are still separate. Confirmed joins are already represented.
+    prior_components = {
+        owner: {old_owner.get(key, key) for key in keys} for owner, keys in groups.items()
+    }
     auto = 0
     for candidate in sorted(candidates, key=lambda p: (-p.score, p.a, p.b)):
-        if (
-            candidate.score >= 0.95
-            and join(candidate.a, candidate.b)
-            and (
-                old_owner.get(candidate.a) != old_owner.get(candidate.b)
-                or candidate.a not in old_owner
-            )
-        ):
-            auto += 1
+        ga, gb = owners[candidate.a], owners[candidate.b]
+        if candidate.score < 0.95 or ga == gb:
+            continue
+        newly_connected = prior_components[ga].isdisjoint(prior_components[gb])
+        if not join(candidate.a, candidate.b):
+            continue
+        prior_components[ga].update(prior_components.pop(gb))
+        auto += newly_connected
     proposals = tuple(p for p in candidates if owners[p.a] != owners[p.b])
     now = datetime.now(UTC)
     contacts: list[dict[str, object]] = []
@@ -189,9 +219,21 @@ def resolve(store: Store) -> ResolveReport:
         ):
             contact["updated_at"] = old_by_id[cid]["updated_at"]
         contacts.append(contact)
+    old_group_targets = {
+        row["id"]: {assignments[k] for k in row["identities"] if k in assignments}
+        for row in old
+        if row["merged_into"] is None
+    }
     for row in old:
         if row["id"] not in claimed:
-            target = next((assignments[k] for k in row["identities"] if k in assignments), None)
+            targets = {assignments[k] for k in row["identities"] if k in assignments}
+            # A split invalidates the historical claim that these identities share an owner.
+            previous_owners = {old_owner[k] for k in row["identities"] if k in old_owner}
+            if len(targets) > 1 or any(
+                len(old_group_targets[owner]) > 1 for owner in previous_owners
+            ):
+                continue
+            target = next(iter(targets), None)
             if row["merged_into"] != target:
                 row = dict(row, merged_into=target, updated_at=now)
             contacts.append(row)

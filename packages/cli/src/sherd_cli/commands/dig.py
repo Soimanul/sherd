@@ -161,13 +161,22 @@ def dig_export(
         ctx = ImportContext(export_root(path), ZoneInfo(zone), frozenset(identities))
         try:
             stats = run_import(store, connector, path, ctx)
-            resolve(store)
         except Exception as error:
             if os.environ.get(DEBUG_ENV) == "1":
                 raise
             raise DigError(
                 f"{connector.id} could not read {path} ({type(error).__name__}: {error})"
             ) from None
+        try:
+            resolve(store)
+        except Exception as error:
+            # Import has committed; report resolution separately without leaking row contents.
+            Console(stderr=True).print(
+                f"warning: contact resolution failed ({type(error).__name__}); "
+                "run sherd contacts resolve to retry",
+                markup=False,
+                soft_wrap=True,
+            )
     console.print(
         f"Imported with {connector.display_name}: {stats.seen:,} rows seen,"
         f" {stats.inserted:,} new → {db}",

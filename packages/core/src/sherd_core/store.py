@@ -237,30 +237,42 @@ class Store:
     def replace_contacts(self, contacts: Iterable[dict[str, object]]) -> None:
         """Atomically replace the derived contact snapshot, including superseded ids."""
         self._require_writable()
+        fields = (
+            "id",
+            "display_name",
+            "aliases",
+            "identities",
+            "sources",
+            "merged_into",
+            "created_at",
+            "updated_at",
+        )
+        schema = pa.schema(
+            [
+                ("id", pa.string()),
+                ("display_name", pa.string()),
+                ("aliases", pa.list_(pa.string())),
+                ("identities", pa.list_(pa.string())),
+                ("sources", pa.list_(pa.string())),
+                ("merged_into", pa.string()),
+                ("created_at", pa.timestamp("us", tz="UTC")),
+                ("updated_at", pa.timestamp("us", tz="UTC")),
+            ]
+        )
+        batch = pa.Table.from_pylist(
+            [{key: contact[key] for key in fields} for contact in contacts], schema=schema
+        )
+        self._conn.register("_contact_snapshot", batch)
         self._conn.begin()
         try:
             self._conn.execute("DELETE FROM contacts")
-            for contact in contacts:
-                self._conn.execute(
-                    "INSERT INTO contacts VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    [
-                        contact[key]
-                        for key in (
-                            "id",
-                            "display_name",
-                            "aliases",
-                            "identities",
-                            "sources",
-                            "merged_into",
-                            "created_at",
-                            "updated_at",
-                        )
-                    ],
-                )
+            self._conn.execute("INSERT INTO contacts SELECT * FROM _contact_snapshot")
             self._conn.commit()
         except BaseException:
             self._conn.rollback()
             raise
+        finally:
+            self._conn.unregister("_contact_snapshot")
 
     def decide_contacts(self, a: str, b: str, decision: Literal["merge", "reject"]) -> None:
         """Persist a decision for a canonical, unordered pair of identity keys."""

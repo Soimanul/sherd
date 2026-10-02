@@ -13,12 +13,11 @@ class GoogleTakeoutGenerator:
             while written < approx_bytes:
                 record = json.dumps(
                     {
-                        "title": "Synthetic page " + "x" * 512,
-                        "url": "https://example.com/synthetic",
+                        "title": f"Synthetic {index}",
+                        "url": f"https://example.com/{index}",
                         "time_usec": 1704067200000000 + seed + index,
-                        "page_transition": "LINK",
-                        "client_id": "synthetic-device-discarded",
-                    }
+                    },
+                    separators=(",", ":"),
                 )
                 out.write(("," if index else "") + record)
                 written += len(record) + 1

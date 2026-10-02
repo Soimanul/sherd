@@ -11,12 +11,12 @@ MONTHS = {
             "jan january ian ianuarie januar enero ene janvier janv",
             "feb february februarie februar febrero février févr",
             "mar march martie mär märz marzo mars",
-            "apr april aprilie abril avr avril",
+            "apr april aprilie abril abr avr avril",
             "may mai mayo",
             "jun june iun iunie juni junio juin",
             "jul july iul iulie juli julio juillet juil",
-            "aug august agosto août",
-            "sep sept september septembrie septiembre septiembre septembre",
+            "aug august agosto ago août",
+            "sep sept set september septembrie septiembre septiembre septembre",
             "oct october octombrie okt oktober octubre octobre",
             "nov november noiembrie noviembre novembre",
             "dec december decembrie dez dezember diciembre dic décembre déc",
@@ -48,8 +48,13 @@ def localise(value: datetime, zone: ZoneInfo) -> datetime:
     return candidate.astimezone(UTC).astimezone(zone).astimezone(UTC)
 
 
+def normalise_spaces(text: str) -> str:
+    return " ".join(text.split())
+
+
 def parse_date(text: str, zone: ZoneInfo) -> datetime:
-    text = text.replace("\u202f", " ").replace("\xa0", " ").strip()
+    text = normalise_spaces(text)
+    text = re.sub(r"\b([ap])\.\s*m\.", lambda match: match[1].upper() + "M", text, flags=re.I)
     clock = re.search(r"(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?\s*(AM|PM)?", text, re.I)
     if clock is None:
         raise ValueError("unsupported activity timestamp")
@@ -73,4 +78,10 @@ def parse_date(text: str, zone: ZoneInfo) -> datetime:
     abbreviation = text[clock.end() :].strip().upper()
     if abbreviation in ZONES:
         return value.replace(tzinfo=timezone(timedelta(hours=ZONES[abbreviation]))).astimezone(UTC)
+    offset = re.fullmatch(r"(?:GMT|UTC)([+-])(\d{1,2})(?::?(\d{2}))?", abbreviation)
+    if offset:
+        minutes = int(offset[2]) * 60 + int(offset[3] or 0)
+        if offset[1] == "-":
+            minutes = -minutes
+        return value.replace(tzinfo=timezone(timedelta(minutes=minutes))).astimezone(UTC)
     return localise(value, zone)

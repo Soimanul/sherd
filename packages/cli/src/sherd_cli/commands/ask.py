@@ -33,11 +33,13 @@ def disclosure(provider: str, model: str, system_prompt: str, question: str) -> 
     return (
         f"`sherd ask` is about to send data to {provider} ({model}), a remote service.\n"
         "This is exactly what the first request sends (the planning prompt with your database's\n"
-        "catalog, row counts and date ranges, and the list of insights):\n"
+        "catalog, row counts and date ranges, and the list of insights; no rows):\n"
         f"{'-' * 72}\n{system_prompt}\n{'-' * 72}\n"
         f"Your question: {question}\n{'-' * 72}\n"
-        "A second request sends the question, the query, the row count and up to 50 result rows\n"
-        "as CSV, so the model can write the answer. API keys are read from the environment and\n"
+        "A second request sends the question, the query, the row count and at most 50 result rows\n"
+        "AND at most 8 KB (8192 bytes) of CSV in total, including the header. Each cell is\n"
+        "limited to 200 characters, truncated with … when needed.\n"
+        "API keys are read from the environment and\n"
         "never stored. Consent is remembered for this provider in $SHERD_HOME/config.json."
     )
 

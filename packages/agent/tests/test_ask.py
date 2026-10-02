@@ -206,3 +206,36 @@ def test_result_json_hides_usage_for_local_providers(demo_store: Store, home: Pa
     assert data["columns"] == ["n"]
     assert data["row_count"] == 1
     assert data["rows"][0]["n"] == demo_store.table_counts()["messages"]
+
+
+def test_csv_caps_huge_cells_rows_and_utf8_bytes() -> None:
+    import csv
+    import io
+
+    table = pa.table({f"column{i}": ['é"\n' * 10000] * 60 for i in range(20)})
+    text = rows_csv(table)
+    parsed = list(csv.reader(io.StringIO(text)))
+    assert len(text.encode()) <= 8192
+    assert 0 < len(parsed) - 1 <= 50
+    assert all(len(cell) <= 200 and cell.endswith("…") for row in parsed[1:] for cell in row)
+
+
+def test_whole_history_aggregate_is_truncated_before_answer(demo_store: Store, home: Path) -> None:
+    import csv
+    import io
+
+    stub = StubProvider(
+        replies=[
+            json.dumps({"sql": "SELECT string_agg(text, ' ') AS history FROM messages"}),
+            "Synthetic answer",
+        ]
+    )
+    stub.remote = True
+    Asker(demo_store, LLM(stub)).ask("Summarize all messages")
+    assert "rows as CSV:" not in stub.calls[0][1]["content"]
+    answer = stub.calls[-1][1]["content"].split("as CSV:\n", 1)[1]
+    rows = list(csv.reader(io.StringIO(answer)))
+    assert len(answer.encode()) <= 8192
+    assert len(rows) == 2
+    assert len(rows[1][0]) == 200
+    assert rows[1][0].endswith("…")

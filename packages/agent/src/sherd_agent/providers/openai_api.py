@@ -8,6 +8,7 @@ import httpx2
 import openai
 from openai.types.chat import ChatCompletionMessageParam
 
+from sherd_agent.providers.accounting import Accounting, instrument_sdk_client
 from sherd_agent.providers.base import ChatMessage, Completion, ProviderError
 
 API_KEY_ENV = "OPENAI_API_KEY"
@@ -28,6 +29,9 @@ class OpenAIProvider:
         self, model: str, *, api_key: str, http_client: httpx2.Client | None = None
     ) -> None:
         self.model = model
+        self.accounting = Accounting()
+        http_client = http_client or httpx2.Client(timeout=TIMEOUT_S)
+        instrument_sdk_client(http_client, self.accounting)
         self._client = openai.OpenAI(
             api_key=api_key, timeout=TIMEOUT_S, max_retries=2, http_client=http_client
         )
@@ -35,6 +39,7 @@ class OpenAIProvider:
     def complete(
         self, messages: Sequence[ChatMessage], *, json_schema: Mapping[str, Any] | None
     ) -> Completion:
+        before = self.accounting.snapshot()
         turns: list[ChatCompletionMessageParam] = [
             {"role": m["role"], "content": m["content"]}  # type: ignore[misc]  # role is a union of the SDK's per-role TypedDicts
             for m in messages
@@ -56,16 +61,21 @@ class OpenAIProvider:
             raise ProviderError(f"openai returned HTTP {error.status_code}") from None
         except openai.APIConnectionError:
             raise ProviderError("openai is not reachable") from None
+        usage = completion.usage
+        self.accounting.input_tokens += usage.prompt_tokens if usage else 0
+        self.accounting.output_tokens += usage.completion_tokens if usage else 0
         if not completion.choices:
             raise ProviderError("openai returned no choices")
         choice = completion.choices[0]
         if choice.message.refusal:
             raise ProviderError("the model declined this request")
-        usage = completion.usage
+        if choice.finish_reason == "length":
+            raise ProviderError("the model ran out of output tokens")
         return Completion(
             text=choice.message.content or "",
             input_tokens=usage.prompt_tokens if usage else 0,
             output_tokens=usage.completion_tokens if usage else 0,
-            bytes_sent=len(raw.http_request.content),
-            bytes_received=len(raw.http_response.content),
+            bytes_sent=self.accounting.bytes_sent - before.bytes_sent,
+            bytes_received=self.accounting.bytes_received - before.bytes_received,
+            requests=self.accounting.requests - before.requests,
         )

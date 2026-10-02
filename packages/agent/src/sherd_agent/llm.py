@@ -12,10 +12,9 @@ from sherd_agent.providers import (
     ChatMessage,
     Completion,
     Provider,
-    ProviderError,
     Settings,
 )
-from sherd_agent.providers.base import body_size
+from sherd_agent.providers.accounting import Accounting
 
 logger = logging.getLogger("sherd.agent")
 
@@ -115,17 +114,30 @@ class LLM:
     def complete(
         self, messages: Sequence[ChatMessage], json_schema: Mapping[str, Any] | None = None
     ) -> Completion:
+        accounting = getattr(self.provider, "accounting", None)
+        before = accounting.snapshot() if isinstance(accounting, Accounting) else None
+        completion = None
         try:
             completion = self.provider.complete(messages, json_schema=json_schema)
-        except ProviderError:
-            # A failed call may still have sent the request; count it rather than under-report.
-            self._record(Completion("", 0, 0, body_size(messages), 0))
-            raise
-        self._record(completion)
-        return completion
+            return completion
+        finally:
+            if isinstance(accounting, Accounting) and before is not None:
+                after = accounting.snapshot()
+                self._record(
+                    Completion(
+                        "",
+                        after.input_tokens - before.input_tokens,
+                        after.output_tokens - before.output_tokens,
+                        after.bytes_sent - before.bytes_sent,
+                        after.bytes_received - before.bytes_received,
+                        after.requests - before.requests,
+                    )
+                )
+            elif completion is not None:
+                self._record(completion)
 
     def _record(self, completion: Completion) -> None:
-        self.usage.requests += 1
+        self.usage.requests += completion.requests
         self.usage.input_tokens += completion.input_tokens
         self.usage.output_tokens += completion.output_tokens
         self.usage.bytes_sent += completion.bytes_sent

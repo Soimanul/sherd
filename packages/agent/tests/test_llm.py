@@ -174,10 +174,9 @@ class FailingRemote(RemoteStub):
         raise ProviderError("anthropic returned HTTP 500")
 
 
-def test_failed_calls_still_count_as_sent(home: Path) -> None:
+def test_failure_without_transport_does_not_invent_wire_usage(home: Path) -> None:
     llm = LLM(FailingRemote())
     with pytest.raises(ProviderError):
         llm.complete([{"role": "user", "content": "abcd"}])
-    totals = json.loads((home / "privacy.json").read_text())["remote"]["anthropic"]
-    assert (totals["requests"], totals["bytes_sent"], totals["bytes_received"]) == (1, 4, 0)
-    assert llm.usage.requests == 1
+    assert not (home / "privacy.json").exists()
+    assert llm.usage.requests == 0

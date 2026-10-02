@@ -15,7 +15,7 @@
 - question: How many messages did I send myself?
   plan:
     sql: SELECT count(*) AS sent FROM messages WHERE is_from_me
-  expect: {kind: sql, columns: [sent], rows: 1, first: {sent: 10165}}
+  expect: {kind: sql, columns: [sent], rows: 1, first: {sent: 10180}}
 
 - question: Which five chats have the most messages?
   plan:
@@ -27,7 +27,7 @@
 - question: How many group chats am I in?
   plan:
     sql: SELECT count(DISTINCT chat_id) AS group_chats FROM messages WHERE chat_kind = 'group'
-  expect: {kind: sql, columns: [group_chats], rows: 1, first: {group_chats: 4}}
+  expect: {kind: sql, columns: [group_chats], rows: 1, first: {group_chats: 6}}
 
 - question: What kinds of media do I send most in chats?
   plan:

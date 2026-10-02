@@ -39,12 +39,12 @@ def load(path: Path | None = None) -> dict[str, Any]:
 
 
 def record(provider: str, remote: bool, completion: Completion, path: Path | None = None) -> None:
-    """Add one request and its byte and token counts to `provider`'s totals."""
+    """Add transport attempts and their byte and token counts to `provider`'s totals."""
     path = path or privacy_path()
     data = load(path)
     totals = data["remote" if remote else "local"].setdefault(provider, {})
     increments = {
-        "requests": 1,
+        "requests": completion.requests,
         "bytes_sent": completion.bytes_sent,
         "bytes_received": completion.bytes_received,
         "input_tokens": completion.input_tokens,

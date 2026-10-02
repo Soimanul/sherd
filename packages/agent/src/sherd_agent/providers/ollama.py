@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from sherd_agent.providers.accounting import Accounting, CountingTransport
 from sherd_agent.providers.base import ChatMessage, Completion, ProviderError
 
 DEFAULT_HOST = "http://127.0.0.1:11434"
@@ -45,11 +46,13 @@ class OllamaProvider:
     ) -> None:
         self.model = model
         self.host = require_loopback(host)
-        self._transport = transport
+        self.accounting = Accounting()
+        self._transport = CountingTransport(transport or httpx.HTTPTransport(), self.accounting)
 
     def complete(
         self, messages: Sequence[ChatMessage], *, json_schema: Mapping[str, Any] | None
     ) -> Completion:
+        before = self.accounting.snapshot()
         body: dict[str, Any] = {
             "model": self.model,
             "messages": list(messages),
@@ -79,10 +82,13 @@ class OllamaProvider:
             text = str(data["message"]["content"])
         except (ValueError, KeyError, TypeError):
             raise ProviderError("ollama returned an unexpected response") from None
+        self.accounting.input_tokens += int(data.get("prompt_eval_count") or 0)
+        self.accounting.output_tokens += int(data.get("eval_count") or 0)
         return Completion(
             text=text,
             input_tokens=int(data.get("prompt_eval_count") or 0),
             output_tokens=int(data.get("eval_count") or 0),
-            bytes_sent=len(payload),
-            bytes_received=len(response.content),
+            bytes_sent=self.accounting.bytes_sent - before.bytes_sent,
+            bytes_received=self.accounting.bytes_received - before.bytes_received,
+            requests=self.accounting.requests - before.requests,
         )

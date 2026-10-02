@@ -61,3 +61,97 @@ def test_guard_restores_after_an_error() -> None:
     with pytest.raises(RuntimeError), offline_guard():
         raise RuntimeError("boom")
     assert socket.socket.connect is original
+
+
+@pytest.mark.parametrize(
+    "name", ["getaddrinfo", "gethostbyname", "gethostbyname_ex", "create_connection"]
+)
+def test_offline_blocks_dns_before_resolver(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[object] = []
+
+    def resolver(*args: object, **kwargs: object) -> None:
+        calls.append(args)
+        raise AssertionError("resolver must not run")
+
+    monkeypatch.setattr(socket, name, resolver)
+    with offline_guard(), pytest.raises(OfflineError):
+        getattr(socket, name)(
+            ("synthetic.example.invalid", 80)
+            if name == "create_connection"
+            else "synthetic.example.invalid"
+        )
+    assert calls == []
+
+
+@pytest.mark.parametrize("module", ["httpx", "httpx2"])
+def test_http_client_offline_never_resolves_remote(
+    module: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib
+
+    client_module = importlib.import_module(module)
+    calls: list[object] = []
+
+    def resolver(*args: object, **kwargs: object) -> None:
+        calls.append(args)
+        raise AssertionError("DNS leaked")
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolver)
+    with (
+        offline_guard(),
+        client_module.Client(trust_env=False) as client,
+        pytest.raises(client_module.ConnectError, match="offline"),
+    ):
+        client.get("http://synthetic.example.invalid")
+    assert calls == []
+
+
+def test_all_socket_functions_restored_after_exception() -> None:
+    names = ("getaddrinfo", "gethostbyname", "gethostbyname_ex", "create_connection")
+    originals = {name: getattr(socket, name) for name in names}
+    connect = socket.socket.connect
+    connect_ex = socket.socket.connect_ex
+
+    def fail() -> None:
+        with offline_guard():
+            assert socket.getaddrinfo("127.8.9.10", 80)[0][4][0] == "127.8.9.10"
+            assert socket.gethostbyname("localhost") == "127.0.0.1"
+            assert socket.gethostbyname_ex("127.0.0.1")[2] == ["127.0.0.1"]
+            assert socket.getaddrinfo("::1", 80)[0][4][0] == "::1"
+            raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError):
+        fail()
+    assert all(getattr(socket, name) is original for name, original in originals.items())
+    assert socket.socket.connect is connect
+    assert socket.socket.connect_ex is connect_ex
+
+
+@pytest.mark.parametrize("host", ["localhost", "LOCALHOST", b"localhost", "127.8.9.10", "::1"])
+def test_allowed_dns_is_numeric_only(host: str | bytes, monkeypatch: pytest.MonkeyPatch) -> None:
+    original = socket.getaddrinfo
+    calls: list[object] = []
+
+    def resolver(*args: Any, **kwargs: Any) -> Any:
+        assert kwargs.get("flags", 0) & socket.AI_NUMERICHOST
+        calls.append(args[0] if args else kwargs["host"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolver)
+    with offline_guard():
+        assert socket.getaddrinfo(host=host, port=80)
+        assert socket.getaddrinfo("localhost", 80, family=socket.AF_INET6)[0][4][0] == "::1"
+    assert calls == [
+        "127.0.0.1" if host in ("localhost", "LOCALHOST", b"localhost") else host,
+        "::1",
+    ]
+
+
+def test_create_connection_keyword_address_allows_loopback() -> None:
+    with offline_guard(), socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        with socket.create_connection(address=("localhost", listener.getsockname()[1])):
+            listener.accept()[0].close()
+        with pytest.raises(OfflineError):
+            socket.create_connection(address=("synthetic.example.invalid", 80))

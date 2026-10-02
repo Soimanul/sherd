@@ -8,6 +8,7 @@ import anthropic
 import httpx2
 from anthropic.types.beta import BetaMessageParam
 
+from sherd_agent.providers.accounting import Accounting, instrument_sdk_client
 from sherd_agent.providers.base import ChatMessage, Completion, ProviderError
 
 API_KEY_ENV = "ANTHROPIC_API_KEY"
@@ -37,6 +38,9 @@ class AnthropicProvider:
         self.model = model
         self.max_tokens = max_tokens
         self.options = dict(options or {})
+        self.accounting = Accounting()
+        http_client = http_client or httpx2.Client(timeout=TIMEOUT_S)
+        instrument_sdk_client(http_client, self.accounting)
         self._client = anthropic.Anthropic(
             api_key=api_key, timeout=TIMEOUT_S, max_retries=2, http_client=http_client
         )
@@ -44,6 +48,7 @@ class AnthropicProvider:
     def complete(
         self, messages: Sequence[ChatMessage], *, json_schema: Mapping[str, Any] | None
     ) -> Completion:
+        before = self.accounting.snapshot()
         system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
         turns: list[BetaMessageParam] = [
             {"role": m["role"], "content": m["content"]} for m in messages if m["role"] != "system"
@@ -76,6 +81,8 @@ class AnthropicProvider:
             raise ProviderError(f"anthropic returned HTTP {error.status_code}") from None
         except anthropic.APIConnectionError:
             raise ProviderError("anthropic is not reachable") from None
+        self.accounting.input_tokens += message.usage.input_tokens
+        self.accounting.output_tokens += message.usage.output_tokens
         if message.stop_reason == "refusal":
             raise ProviderError("the model declined this request")
         if message.stop_reason == "max_tokens":
@@ -85,6 +92,7 @@ class AnthropicProvider:
             text=text,
             input_tokens=message.usage.input_tokens,
             output_tokens=message.usage.output_tokens,
-            bytes_sent=len(raw.http_request.content),
-            bytes_received=len(raw.http_response.content),
+            bytes_sent=self.accounting.bytes_sent - before.bytes_sent,
+            bytes_received=self.accounting.bytes_received - before.bytes_received,
+            requests=self.accounting.requests - before.requests,
         )

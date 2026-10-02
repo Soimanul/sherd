@@ -82,7 +82,7 @@ def test_anthropic_request_shape_and_completion() -> None:
         "format": {"type": "json_schema", "schema": SCHEMA},
     }
     assert body["fallbacks"] == "default"
-    assert completion.bytes_sent == request["size"]
+    assert completion.bytes_sent > request["size"]
 
 
 def test_anthropic_without_options_or_schema_sends_neither() -> None:
@@ -118,7 +118,9 @@ def test_anthropic_errors_are_safe_messages(status: int, message: str) -> None:
     assert "secret-key" not in str(caught.value)
 
 
-def openai_client(seen: Seen, status: int = 200, refusal: str | None = None) -> httpx2.Client:
+def openai_client(
+    seen: Seen, status: int = 200, refusal: str | None = None, finish_reason: str = "stop"
+) -> httpx2.Client:
     def handler(request: httpx2.Request) -> httpx2.Response:
         seen.append({"headers": dict(request.headers), "body": json.loads(request.content)})
         if status != 200:
@@ -133,7 +135,7 @@ def openai_client(seen: Seen, status: int = 200, refusal: str | None = None) -> 
                 "choices": [
                     {
                         "index": 0,
-                        "finish_reason": "stop",
+                        "finish_reason": finish_reason,
                         "message": {
                             "role": "assistant",
                             "content": '{"sql": "SELECT 1"}',
@@ -214,7 +216,7 @@ def test_ollama_request_shape_and_completion() -> None:
         "options": {"temperature": 0},
         "format": SCHEMA,
     }
-    assert completion.bytes_sent == len(seen[0]["body"])
+    assert completion.bytes_sent > len(seen[0]["body"])
     assert not provider.remote
 
 
@@ -297,3 +299,95 @@ def test_create_reads_keys_from_env_only(monkeypatch: pytest.MonkeyPatch) -> Non
     assert providers.create("ollama", "q", settings).remote is False
     with pytest.raises(ProviderError, match="unknown provider"):
         providers.create("gemini", "m", settings)
+
+
+@pytest.mark.parametrize("name", ["openai", "anthropic"])
+@pytest.mark.parametrize("outcome", ["success", "failure", "refusal", "max_tokens"])
+def test_transport_counts_all_sdk_attempts(name: str, outcome: str, tmp_path: Any) -> None:
+    from sherd_agent.llm import LLM
+
+    seen: Seen = []
+    if name == "openai":
+        source = openai_client(
+            seen,
+            refusal="no" if outcome == "refusal" else None,
+            finish_reason="length" if outcome == "max_tokens" else "stop",
+        )
+    else:
+        source = anthropic_client(
+            seen, stop_reason=outcome if outcome in ("refusal", "max_tokens") else "end_turn"
+        )
+    sent = 0
+    received = 0
+    attempts = 0
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal sent, received, attempts
+        attempts += 1
+        # Independently reconstruct HTTP bytes at the fake wire boundary.
+        sent += len(request.method.encode() + b" " + request.url.raw_path + b" HTTP/1.1\r\n")
+        sent += sum(len(k + b": " + v + b"\r\n") for k, v in request.headers.raw) + 2
+        sent += len(request.read())
+        if attempts < 3 or outcome == "failure":
+            response = httpx2.Response(
+                500,
+                json={"error": {"type": "error", "message": "synthetic failure"}},
+                headers={"retry-after-ms": "1"},
+            )
+        else:
+            response = source.send(request)
+        received += len(f"HTTP/1.1 {response.status_code} {response.reason_phrase}\r\n".encode())
+        received += sum(len(k + b": " + v + b"\r\n") for k, v in response.headers.raw) + 2
+        received += len(response.content)
+        return response
+
+    client = httpx2.Client(transport=httpx2.MockTransport(handler))
+    provider = (
+        OpenAIProvider("m", api_key="synthetic-key", http_client=client)
+        if name == "openai"
+        else AnthropicProvider("m", api_key="synthetic-key", http_client=client)
+    )
+    path = tmp_path / "privacy.json"
+    llm = LLM(provider, privacy_file=path)
+    if outcome == "success":
+        llm.complete(MESSAGES)
+    else:
+        with pytest.raises(ProviderError):
+            llm.complete(MESSAGES)
+    totals = json.loads(path.read_text())["remote"][name]
+    assert attempts == totals["requests"] == llm.usage.requests == 3
+    assert totals["bytes_sent"] == llm.usage.bytes_sent == sent
+    assert totals["bytes_received"] == llm.usage.bytes_received == received
+    assert totals["input_tokens"] == (
+        0 if outcome == "failure" else 90 if name == "openai" else 120
+    )
+    assert totals["output_tokens"] == (0 if outcome == "failure" else 9 if name == "openai" else 15)
+    source.close()
+    client.close()
+
+
+@pytest.mark.parametrize("module", [httpx, httpx2])
+def test_transport_counts_consumed_chunks_on_io_failure(module: Any) -> None:
+    from sherd_agent.providers.accounting import Accounting, CountingTransport, SDKCountingTransport
+
+    counts = Accounting()
+
+    class PartialStream(module.SyncByteStream):  # type: ignore[misc]  # test runs both incompatible httpx versions
+        def __iter__(self) -> Any:
+            yield b"partial"
+            raise module.ReadError("synthetic read failure")
+
+    class FakeTransport(module.BaseTransport):  # type: ignore[misc]  # test runs both incompatible httpx versions
+        def handle_request(self, request: Any) -> Any:
+            assert b"".join(request.stream) == b"synthetic body"
+            return module.Response(200, stream=PartialStream())
+
+    wrapper = CountingTransport if module is httpx else SDKCountingTransport
+    with (
+        module.Client(transport=wrapper(FakeTransport(), counts)) as client,
+        pytest.raises(module.ReadError),
+    ):
+        client.post("http://127.0.0.1/test", content=b"synthetic body")
+    assert counts.requests == 1
+    assert counts.bytes_sent > len(b"synthetic body")
+    assert counts.bytes_received == len(b"HTTP/1.1 200 OK\r\n\r\npartial")

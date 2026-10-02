@@ -141,7 +141,10 @@ def test_remote_requires_consent_and_sends_nothing_without_it(
     assert "### messages (" in got.stderr  # the catalog exactly as it would be sent
     assert "messages.volume_by_contact" in got.stderr  # the list of digs
     assert f"Your question: {QUESTION}" in got.stderr
-    assert "up to 50 result rows" in got.stderr
+    assert "at most 50 result rows" in got.stderr
+    assert "at most 8 KB (8192 bytes) of CSV in total" in got.stderr
+    assert "limited to 200 characters, truncated with …" in got.stderr
+    assert "no rows" in got.stderr
     assert "nothing was sent; pass --yes" in got.stderr
     assert all(not provider.calls for provider in remote)
     assert not (home / "privacy.json").exists()

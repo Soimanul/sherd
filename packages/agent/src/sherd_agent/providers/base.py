@@ -23,6 +23,7 @@ class Completion:
     output_tokens: int
     bytes_sent: int
     bytes_received: int
+    requests: int = 1
 
 
 class Provider(Protocol):

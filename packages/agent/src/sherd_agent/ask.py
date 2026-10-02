@@ -25,6 +25,8 @@ from sherd_agent.providers import ChatMessage
 logger = logging.getLogger("sherd.agent")
 
 ANSWER_ROWS = 50
+ANSWER_CSV_BYTES = 8 * 1024
+ANSWER_CELL_CHARS = 200
 CATEGORICAL_CHART_MAX = 50
 
 
@@ -209,12 +211,29 @@ def plan_prompt(store: Store, digs: Sequence[Dig], *, tz: str, today: date) -> s
 
 
 def rows_csv(table: pa.Table, limit: int = ANSWER_ROWS) -> str:
-    out = io.StringIO()
-    writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(table.column_names)
-    for row in records(table.slice(0, limit)):
-        writer.writerow(["" if row[n] is None else row[n] for n in table.column_names])
-    return out.getvalue()
+    def cell(value: object) -> str:
+        text = "" if value is None else str(value)
+        return text if len(text) <= ANSWER_CELL_CHARS else text[: ANSWER_CELL_CHARS - 1] + "…"
+
+    def line(values: list[str]) -> str:
+        out = io.StringIO()
+        csv.writer(out, lineterminator="\n").writerow(values)
+        return out.getvalue()
+
+    header = line([cell(name) for name in table.column_names])
+    size = len(header.encode())
+    if size > ANSWER_CSV_BYTES:
+        return ""
+    lines = [header]
+    # Convert one sliced row at a time; never materialize 50 huge cells together.
+    for index in range(min(table.num_rows, limit, ANSWER_ROWS)):
+        row = records(table.slice(index, 1))[0]
+        encoded = line([cell(row[name]) for name in table.column_names])
+        size += len(encoded.encode())
+        if size > ANSWER_CSV_BYTES:
+            break
+        lines.append(encoded)
+    return "".join(lines)
 
 
 # -- charts ------------------------------------------------------------------------------------
@@ -428,11 +447,11 @@ class Asker:
         count = f"{result.row_count}" + (
             " (truncated at the row budget)" if result.truncated else ""
         )
-        shown = min(result.row_count, ANSWER_ROWS)
         table = result.table if result.table is not None else pa.table({})
         content = (
             f"Question: {result.question}\n\nQuery: {query}\n\nRow count: {count}\n\n"
-            f"First {shown} rows as CSV:\n{rows_csv(table)}"
+            "First rows (up to 50; CSV limited to 8 KB; cells limited to 200 characters) "
+            f"as CSV:\n{rows_csv(table)}"
         )
         messages: list[ChatMessage] = [
             {"role": "system", "content": _prompt("answer")},

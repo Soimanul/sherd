@@ -1,0 +1,379 @@
+"""Bounded-memory parsing of WhatsApp chat exports."""
+
+import logging
+import re
+import unicodedata
+import zipfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from io import TextIOWrapper
+from pathlib import Path
+from typing import Literal, TextIO
+from zoneinfo import ZoneInfo
+
+from sherd_core import Message, content_hash
+
+from sherd_connectors.base import DetectResult, ImportContext
+
+MediaType = Literal["image", "video", "audio", "document", "sticker", "gif", "other"]
+DateOrder = Literal["dm", "md"]
+logger = logging.getLogger("sherd.connectors.whatsapp")
+_MARKS = dict.fromkeys(
+    map(ord, "\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+)
+_DATE = r"(?P<a>\d{1,2})[/.](?P<b>\d{1,2})[/.](?P<y>\d{2}|\d{4})"
+_TIME = r"(?P<h>\d{1,2}):(?P<m>\d{2})(?::(?P<s>\d{2}))?(?:\s*(?P<ap>[ap]\.?m\.?))?"
+# Separate patterns avoid duplicate named groups in the two platform alternatives.
+_ANDROID = re.compile(rf"^{_DATE},\s*{_TIME}\s+-\s+(?P<body>.*)$", re.IGNORECASE)
+_IOS = re.compile(rf"^\[{_DATE},\s*{_TIME}\]\s*(?P<body>.*)$", re.IGNORECASE)
+_PHONE = re.compile(r"^\+?[\d ()\-\.]+$")
+_GROUP = re.compile(
+    r"created (?:this |the )?group|added .+|left$|changed the (?:subject|group)|"
+    r"a creat grupul|a adăugat|a părăsit|a schimbat (?:subiectul|numele)|"
+    r"gruppe .*(?:erstellt|gegründet)|hinzugefügt|hat .*verlassen|gruppenbetreff|"
+    r"creó el grupo|añadió|salió del grupo|cambió el asunto",
+    re.IGNORECASE,
+)
+_SYSTEM = re.compile(
+    r"^(?:messages and calls are end-to-end encrypted|missed (?:voice|video) call|"
+    r"your security code with .+ changed|.+ security code changed|"
+    r"mesajele și apelurile sunt criptate|apel (?:vocal |video )?ratat|"
+    r"codul (?:tău )?de securitate|nachrichten und anrufe sind|"
+    r"verpasster (?:sprach|video)anruf|sicherheitsnummer|"
+    r"los mensajes y las llamadas|llamada perdida|cambió tu código de seguridad)",
+    re.IGNORECASE,
+)
+_DELETED = frozenset(
+    phrase.casefold()
+    for phrase in (
+        "This message was deleted",
+        "You deleted this message",
+        "Acest mesaj a fost șters",
+        "Ai șters acest mesaj",
+        "Dieser Nachricht wurde gelöscht",
+        "Diese Nachricht wurde gelöscht",
+        "Du hast diese Nachricht gelöscht",
+        "Este mensaje fue eliminado",
+        "Eliminaste este mensaje",
+        "Borraste este mensaje",
+    )
+)
+_MEDIA = re.compile(
+    r"^(?:<(?P<generic>Media omitted|Media lipsă|Fișier media omis|Medien ausgeschlossen|"
+    r"Multimedia omitido)>|(?P<type>image|video|audio|sticker|GIF|document) omitted|"
+    r"<attached:\s*(?P<ios>[^>]+)>|(?P<android>[^\n]+?) \(file attached\))"
+    r"(?=$|\s)(?P<caption>.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def clean(value: str) -> str:
+    return value.translate(_MARKS)
+
+
+def normalise_name(value: str) -> str:
+    return " ".join(unicodedata.normalize("NFC", value).split()).casefold()
+
+
+def sender_id(sender: str) -> str:
+    if _PHONE.fullmatch(sender) and 7 <= len(re.sub(r"\D", "", sender)) <= 15:
+        return "whatsapp:+" + re.sub(r"\D", "", sender)
+    return "whatsapp:name:" + sender
+
+
+def is_self(sender: str, identities: frozenset[str]) -> bool:
+    key = sender_id(sender)
+    return any(sender_id(clean(identity).strip()) == key for identity in identities)
+
+
+def prefix(line: str) -> re.Match[str] | None:
+    return _ANDROID.match(line) or _IOS.match(line)
+
+
+def detect_date_order(lines: Iterator[str]) -> DateOrder:
+    """Unambiguous fields override the clock heuristic, across the entire chat."""
+    dm = md = twelve = False
+    for line in lines:
+        match = prefix(clean(line.lstrip("\ufeff")).rstrip("\r\n"))
+        if match:
+            valid = False
+            for candidate in ("dm", "md"):
+                try:
+                    wall_time(match, candidate)
+                except ValueError:
+                    continue
+                valid = True
+                break
+            if not valid:
+                continue
+            dm |= int(match["a"]) > 12
+            md |= int(match["b"]) > 12
+            twelve |= match["ap"] is not None
+    return "dm" if dm else "md" if md or twelve else "dm"
+
+
+def wall_time(match: re.Match[str], order: DateOrder) -> datetime:
+    a, b, year = int(match["a"]), int(match["b"]), int(match["y"])
+    year = year + 2000 if year < 100 else year
+    hour = int(match["h"])
+    ampm = match["ap"]
+    if ampm:
+        if not 1 <= hour <= 12:
+            raise ValueError("invalid WhatsApp 12-hour time")
+        hour = hour % 12 + (12 if ampm.lower().startswith("p") else 0)
+    return datetime(
+        year,
+        a if order == "md" else b,
+        b if order == "md" else a,
+        hour,
+        int(match["m"]),
+        int(match["s"] or 0),
+    )
+
+
+def timestamp(match: re.Match[str], order: DateOrder, tz: ZoneInfo) -> datetime:
+    aware = wall_time(match, order).replace(tzinfo=tz, fold=0)
+    # Round-trip shifts nonexistent wall times forward by the DST gap; fold=0
+    # picks the first occurrence of an ambiguous wall time.
+    return aware.astimezone(UTC).astimezone(tz)
+
+
+@dataclass(frozen=True)
+class ChatFile:
+    path: Path
+    member: str | None = None
+
+    @property
+    def name(self) -> str:
+        return Path(self.member).name if self.member else self.path.name
+
+    @contextmanager
+    def open(self) -> Iterator[TextIO]:
+        if self.member is None:
+            with self.path.open(encoding="utf-8-sig") as stream:
+                yield stream
+        else:
+            with (
+                zipfile.ZipFile(self.path) as archive,
+                archive.open(self.member) as raw,
+                TextIOWrapper(raw, encoding="utf-8-sig") as stream,
+            ):
+                yield stream
+
+    def sample(self) -> str:
+        """Read at most the first 64 KiB, without text-buffer read-ahead."""
+        if self.member is None:
+            with self.path.open("rb") as raw:
+                data = raw.read(65_536)
+        else:
+            with zipfile.ZipFile(self.path) as archive, archive.open(self.member) as raw:
+                data = raw.read(65_536)
+        return data.decode("utf-8-sig", errors="replace")
+
+    def source_file(self, root: Path) -> str:
+        relative = self.path.relative_to(root).as_posix()
+        return relative if self.member is None else relative + "/" + self.member
+
+    def chat_name(self) -> str | None:
+        stem = Path(self.name).stem
+        if stem.startswith("WhatsApp Chat with "):
+            return clean(stem.removeprefix("WhatsApp Chat with ")).strip()
+        if self.member and self.path.stem.startswith("WhatsApp Chat - "):
+            return clean(self.path.stem.removeprefix("WhatsApp Chat - ")).strip()
+        return None
+
+
+def chat_files(path: Path) -> Iterator[ChatFile]:
+    files = sorted(path.rglob("*")) if path.is_dir() else [path]
+    for file in files:
+        if not file.is_file():
+            continue
+        if file.suffix.lower() == ".txt":
+            yield ChatFile(file)
+        elif file.suffix.lower() == ".zip":
+            with zipfile.ZipFile(file) as archive:
+                for member in sorted(archive.namelist()):
+                    name = Path(member).name
+                    if name == "_chat.txt" or (
+                        name.startswith("WhatsApp Chat with ") and name.endswith(".txt")
+                    ):
+                        yield ChatFile(file, member)
+
+
+def split_body(body: str) -> tuple[str | None, str]:
+    if _SYSTEM.search(body) or _GROUP.search(body.partition(": ")[0]):
+        return None, body
+    sender, sep, text = body.partition(": ")
+    return (sender.strip(), text) if sep else (None, body)
+
+
+def records(file: ChatFile) -> Iterator[tuple[re.Match[str], str | None, str]]:
+    current: re.Match[str] | None = None
+    sender: str | None = None
+    parts: list[str] = []
+    with file.open() as stream:
+        for raw in stream:
+            line = clean(raw.rstrip("\r\n"))
+            match = prefix(line)
+            if match:
+                if current is not None:
+                    yield current, sender, "\n".join(parts)
+                current = match
+                sender, body = split_body(match["body"])
+                parts = [body]
+            elif current is not None:
+                parts.append(line)
+    if current is not None:
+        yield current, sender, "\n".join(parts)
+
+
+def media(text: str) -> tuple[MediaType, str | None] | None:
+    match = _MEDIA.match(text)
+    if match is None:
+        return None
+    kind: MediaType = "other"
+    explicit = (match["type"] or "").lower()
+    types: dict[str, MediaType] = {
+        "image": "image",
+        "video": "video",
+        "audio": "audio",
+        "sticker": "sticker",
+        "gif": "gif",
+        "document": "document",
+    }
+    if explicit in types:
+        kind = types[explicit]
+    else:
+        filename = (match["ios"] or match["android"] or "").lower()
+        ext = Path(filename).suffix
+        if "sticker" in filename or ext == ".webp":
+            kind = "sticker"
+        elif ext == ".gif":
+            kind = "gif"
+        elif ext in (".jpg", ".jpeg", ".png", ".heic"):
+            kind = "image"
+        elif ext in (".mp4", ".mov", ".3gp"):
+            kind = "video"
+        elif ext in (".opus", ".ogg", ".mp3", ".m4a", ".wav"):
+            kind = "audio"
+        elif ext:
+            kind = "document"
+    return kind, match["caption"].strip() or None
+
+
+class WhatsAppConnector:
+    id = "whatsapp"
+    version = "1"
+    display_name = "WhatsApp"
+
+    def detect(self, path: Path) -> DetectResult:
+        try:
+            for index, file in enumerate(chat_files(path)):
+                if index >= 3:
+                    break
+                lines = file.sample().splitlines()
+                matches = sum(prefix(clean(line.lstrip("\ufeff"))) is not None for line in lines)
+                if matches:
+                    named = file.name == "_chat.txt" or file.name.startswith("WhatsApp Chat with ")
+                    return DetectResult(0.98 if named else 0.8, "WhatsApp timestamped chat text")
+        except (OSError, UnicodeError, zipfile.BadZipFile):
+            return DetectResult(0.0, "Unreadable chat export")
+        return DetectResult(0.0, "No WhatsApp chat text")
+
+    def parse(self, path: Path, ctx: ImportContext) -> Iterator[Message]:
+        skipped = unnamed = 0
+        for file in chat_files(path):
+            with file.open() as lines:
+                order = detect_date_order(iter(lines))
+            senders: set[str] = set()
+            group = False
+            fallback: str | None = None
+            # Only prefixes are needed for chat-wide metadata, not multiline text.
+            with file.open() as lines:
+                for line in lines:
+                    match = prefix(clean(line.rstrip("\r\n")))
+                    if match is None:
+                        continue
+                    try:
+                        wall_time(match, order)
+                    except ValueError:
+                        continue
+                    sender, body = split_body(match["body"])
+                    group |= sender is None and _GROUP.search(body) is not None
+                    if sender:
+                        if len(senders) < 3:
+                            senders.add(sender_id(sender))
+                        if fallback is None and not is_self(sender, ctx.self_identities):
+                            fallback = sender
+            name = file.chat_name() or fallback
+            chat_id = content_hash("whatsapp", normalise_name(name)) if name else None
+            source_file = file.source_file(ctx.export_root)
+            # The coordinator contract permits counters to reset at each timestamp.
+            counts: dict[str, int] = {}
+            previous_ts: str | None = None
+            for match, sender, original in records(file):
+                try:
+                    ts = timestamp(match, order, ctx.tz)
+                except ValueError:
+                    skipped += 1
+                    continue
+                if sender == "":
+                    skipped += 1
+                    continue
+                if chat_id is None:
+                    chat_id = content_hash(
+                        "whatsapp", "unnamed", ts.astimezone(UTC).isoformat(), original
+                    )
+                    unnamed += 1
+                timestamp_key = ts.isoformat()
+                if timestamp_key != previous_ts:
+                    counts.clear()
+                    previous_ts = timestamp_key
+                key = content_hash(chat_id, timestamp_key, sender, original)
+                occurrence = counts.get(key, 0)
+                counts[key] = occurrence + 1
+                kind: Literal["text", "media", "system", "deleted"] = "text"
+                text: str | None = original
+                media_type: MediaType | None = None
+                if sender is None:
+                    kind = "system"
+                elif original.strip().casefold() in _DELETED:
+                    kind, text = "deleted", None
+                elif attachment := media(original):
+                    kind = "media"
+                    media_type, text = attachment
+                yield Message(
+                    source_file=source_file,
+                    source_row_id=content_hash(
+                        chat_id, ts.isoformat(), sender, original, occurrence
+                    ),
+                    chat_id=chat_id,
+                    chat_name=name,
+                    chat_kind="group"
+                    if name is not None and (group or len(senders) > 2)
+                    else "direct",
+                    sender_id=sender_id(sender) if sender is not None else None,
+                    sender_name=sender,
+                    is_from_me=sender is not None and is_self(sender, ctx.self_identities),
+                    ts=ts,
+                    text=text,
+                    kind=kind,
+                    media_type=media_type,
+                )
+
+        if skipped:
+            logger.warning("skipped malformed rows: connector=whatsapp count=%d", skipped)
+
+        if unnamed:
+            logger.warning("unnamed chats: connector=whatsapp count=%d", unnamed)
+
+    def fixtures(self) -> list[Path]:
+        for root in Path(__file__).resolve().parents:
+            directory = root / "fixtures" / self.id
+            if directory.is_dir():
+                return sorted(
+                    path for path in directory.iterdir() if (path / "meta.json").is_file()
+                )
+        return []

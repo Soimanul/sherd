@@ -12,7 +12,7 @@ from sherd_connectors.base import DetectResult, ImportContext
 
 class BankCsvConnector:
     id = "bank_csv"
-    version = "1"
+    version = "2"
     display_name = "Bank CSV"
 
     def detect(self, path: Path) -> DetectResult:

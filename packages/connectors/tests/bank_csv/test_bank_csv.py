@@ -32,6 +32,27 @@ def ctx(path: Path, tz: str = "UTC") -> ImportContext:
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
+        ("The Red Cat", "The Red Cat"),
+        ("Top up", "Top Up"),
+        ("Spring gap", "Spring Gap"),
+        ("Cafe Bar", "Cafe Bar"),
+        ("Aldi Sud", "Aldi Sud"),
+        ("Pay by Card Visa", "Pay By Visa"),
+        ("Joe's Cafe", "Joe's Cafe"),
+        ("McDonald's", "Mcdonald's"),
+        ("Card Payment POS 12", "Card Payment POS 12"),
+        ("Fictional Books GB", "Fictional Books"),
+        ("Fictional Grocer USA", "Fictional Grocer"),
+        ("Fictional Bakery DE", "Fictional Bakery"),
+        ("Fictional Bistro FRA", "Fictional Bistro"),
+        ("Fictional Coffee LDN", "Fictional Coffee"),
+        ("Fictional Deli NYC", "Fictional Deli"),
+        ("Fictional Tea SIN", "Fictional Tea"),
+        ("Fictional Shop ro", "Fictional Shop Ro"),
+        ("Fictional Shop Ro", "Fictional Shop Ro"),
+        ("Fictional Shop XYZ", "Fictional Shop Xyz"),
+        ("RO", "Ro"),
+        ("Fictional Club UK", "Fictional Club Uk"),
         ("Fictional Market *T123 RO", "Fictional Market"),
         ("Example Cafe #123", "Example Cafe"),
         ("Example Shop 123456", "Example Shop"),
@@ -45,7 +66,7 @@ def ctx(path: Path, tz: str = "UTC") -> ImportContext:
         ("   Example    Market   ", "Example Market"),
         ("example market RO", "Example Market"),
         ("example market BUC", "Example Market"),
-        ("example market RO BUC", "Example Market"),
+        ("example market RO BUC", "Example Market Ro"),
         ("example market *terminal #12 1234", "Example Market"),
         ("Example Market 123", "Example Market 123"),
         ("Example Market 12", "Example Market 12"),
@@ -259,4 +280,147 @@ def test_streaming(tmp_path: Path) -> None:
     p = tmp_path / "large.csv"
     GENERATOR.write(p, 50 * 1024 * 1024, 42)
     assert p.stat().st_size >= 50 * 1024 * 1024
+    with p.open() as source:
+        next(source)
+        assert len(next(source)) < 200
     assert_streaming(CONNECTOR, p, max_rss_mb=200)
+
+
+def write_rows(path: Path, records: list[tuple[str, str, str]]) -> None:
+    with path.open("w", newline="") as out:
+        writer = csv.writer(out)
+        writer.writerow(HEADERS)
+        for stamp, merchant, amount in records:
+            writer.writerow(
+                [
+                    "CARD_PAYMENT",
+                    "Current",
+                    stamp,
+                    stamp,
+                    merchant,
+                    amount,
+                    "0",
+                    "RON",
+                    "COMPLETED",
+                    "",
+                ]
+            )
+
+
+def test_occurrences_reset_on_timestamp_change(tmp_path: Path) -> None:
+    p = tmp_path / "statement.csv"
+    a = ("2024-01-01 12:00:00", "Fictional Cafe", "-10")
+    b = ("2024-01-02 12:00:00", "Fictional Cafe", "-10")
+    write_rows(p, [a, a, b, a])
+    rows = list(CONNECTOR.parse(p, ctx(p)))
+    assert rows[0].source_row_id != rows[1].source_row_id
+    assert rows[0].source_row_id == rows[3].source_row_id
+
+
+def test_rounding_half_even_count(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    p = tmp_path / "statement.csv"
+    write_rows(
+        p,
+        [
+            ("2024-01-01 12:00:00", "Fictional Cafe", value)
+            for value in ["1.005", "1.015", "-1.005", "0.00012345", "2.00"]
+        ],
+    )
+    rows = list(CONNECTOR.parse(p, ctx(p)))
+    assert [r.amount for r in rows] == list(map(Decimal, ["1.00", "1.02", "-1.00", "0.00", "2.00"]))
+    assert caplog.messages == ["bank_csv rounded records: count=4"]
+
+
+def test_decode_error_fails_import(tmp_path: Path) -> None:
+    p = tmp_path / "statement.csv"
+    write_rows(p, [("2024-01-01 12:00:00", "Fictional Cafe", "-10")] * 1000)
+    with p.open("ab") as out:
+        out.write(b"\xff\n")
+    assert CONNECTOR.detect(p).confidence == 0.95
+    iterator = CONNECTOR.parse(p, ctx(p))
+    assert next(iterator).merchant == "Fictional Cafe"
+    with pytest.raises(MappingError, match="encoding setting"):
+        list(iterator)
+    store = Store.open(tmp_path / "life.duckdb")
+    try:
+        with pytest.raises(MappingError) as raised:
+            run_import(store, CONNECTOR, p, ctx(p))
+        assert (
+            str(raised.value)
+            == "statement.csv: cannot decode CSV; check mapping revolut encoding setting"
+        )
+        assert store.query("SELECT status FROM imports").to_pylist() == [{"status": "failed"}]
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "error_field"),
+    [
+        ("description", "Typo", "description"),
+        ("amount", {"column": "Typo"}, "amount.column"),
+        ("counterparty", {"column": "Typo"}, "counterparty.column"),
+        ("account", "bank:{Typo}", "account.Typo"),
+    ],
+)
+def test_missing_mapping_column_fails_before_rows(
+    tmp_path: Path,
+    field: str,
+    replacement: Any,
+    error_field: str,
+) -> None:
+    from sherd_connectors.bank_csv.engine import parse
+
+    data = yaml.safe_load((MAPPINGS / "revolut.yaml").read_text())
+    data[field] = replacement
+    mapping_file = tmp_path / "mapping.yaml"
+    mapping_file.write_text(yaml.safe_dump(data))
+    p = tmp_path / "statement.csv"
+    write_rows(p, [("2024-01-01 12:00:00", "Fictional Cafe", "-10")])
+    with pytest.raises(MappingError) as raised:
+        next(parse(p, ctx(p), [load_mapping(mapping_file)]))
+    assert str(raised.value) == f"mapping revolut: field {error_field}: missing column Typo"
+
+
+def test_bad_mapping_does_not_abort_other_detection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sherd_connectors.bank_csv import BankCsvConnector
+    from sherd_connectors.base import DetectResult
+    from sherd_connectors.registry import rank
+
+    user = tmp_path / "bank_mappings"
+    user.mkdir()
+    (user / "bad.yaml").write_text("id: broken\n")
+    monkeypatch.setenv("SHERD_HOME", str(tmp_path))
+
+    class OtherConnector(BankCsvConnector):
+        id = "other"
+
+        def detect(self, path: Path) -> DetectResult:
+            return DetectResult(0.95, "synthetic other connector")
+
+    ranked = rank(tmp_path, {"bank_csv": CONNECTOR, "other": OtherConnector()})
+    assert ranked[0][0].id == "other"
+    assert ranked[0][1].confidence == 0.95
+    assert (
+        next(result for connector, result in ranked if connector.id == "bank_csv").confidence == 0
+    )
+
+
+def test_invert_without_fee(tmp_path: Path) -> None:
+    from sherd_connectors.bank_csv.engine import parse
+    from sherd_connectors.bank_csv.mapping import Mapping
+
+    data = yaml.safe_load((MAPPINGS / "revolut.yaml").read_text())
+    data["amount"] = {"column": "Amount", "sign": "invert"}
+    p = tmp_path / "statement.csv"
+    write_rows(p, [("2024-01-01 12:00:00", "Fictional Cafe", "10")])
+    assert next(parse(p, ctx(p), [Mapping.model_validate(data)])).amount == Decimal("-10.00")
+
+
+def test_undeclared_thousands_count(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    p = tmp_path / "statement.csv"
+    write_rows(p, [("2024-01-01 12:00:00", "Fictional Cafe", "1,234.5")])
+    assert list(CONNECTOR.parse(p, ctx(p))) == []
+    assert caplog.messages == ["bank_csv skipped malformed records: count=1"]

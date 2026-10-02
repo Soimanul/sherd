@@ -1,16 +1,14 @@
 """Streaming CSV import with bounded-memory occurrence counting."""
 
 import csv
-import dbm
 import io
 import logging
 import re
-import tempfile
 import zipfile
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 from pathlib import Path
 from string import Formatter
 from typing import IO, TextIO
@@ -18,18 +16,63 @@ from zoneinfo import ZoneInfo
 
 from sherd_core import Transaction, content_hash
 
-from sherd_connectors.bank_csv.mapping import Mapping
+from sherd_connectors.bank_csv.mapping import Mapping, MappingError
 from sherd_connectors.base import ImportContext
+
+# Country codes for common statement markets; city abbreviations used in card
+# descriptors: Bucharest, London, New York and Singapore.
+_LOCATION_CODES = frozenset(
+    [
+        "RO",
+        "ROU",
+        "GB",
+        "GBR",
+        "UK",
+        "US",
+        "USA",
+        "DE",
+        "DEU",
+        "FR",
+        "FRA",
+        "IT",
+        "ITA",
+        "ES",
+        "ESP",
+        "NL",
+        "NLD",
+        "IE",
+        "IRL",
+        "CH",
+        "CHE",
+        "AT",
+        "AUT",
+        "CA",
+        "CAN",
+        "AU",
+        "AUS",
+        "SG",
+        "SGP",
+        "BUC",
+        "LDN",
+        "NYC",
+        "SIN",
+    ]
+) - {"UK"}  # UK is not an ISO 3166 alpha-2 code.
 
 
 def normalise_merchant(raw: str) -> str:
-    value = raw.lower()
-    value = re.sub(r"https?://\S+|\b(?:[\w-]+\.)+[a-z]{2,}(?:/\S*)?", " ", value)
+    value = raw
+    value = re.sub(r"https?://\S+|\b(?:[\w-]+\.)+[a-z]{2,}(?:/\S*)?", " ", value, flags=re.I)
     value = re.sub(r"\*\S+|#\d+|\d{4,}", " ", value)
-    value = re.sub(r"\b(?:payment|purchase|card|pos)\b", " ", value)
-    value = re.sub(r"(?:\s+[a-z]{2,3})+$", "", value.strip())
-    value = " ".join(value.split()).title()
-    return value or raw
+    value = re.sub(r"\b(?:payment|purchase|card|pos)\b", " ", value, flags=re.I)
+    tokens = value.split()
+    if len(tokens) > 1 and tokens[-1] in _LOCATION_CODES:
+        tokens.pop()
+    value = " ".join(tokens)
+    if not any(c.isalpha() for c in value):
+        return raw
+    # Title case words without treating apostrophes as word boundaries.
+    return re.sub(r"[^\W\d_]+(?:['\u2019][^\W\d_]+)*", lambda m: m[0].capitalize(), value)
 
 
 def localise(value: datetime, tz: ZoneInfo) -> datetime:
@@ -90,16 +133,21 @@ def _get(row: dict[str, str], column: str | None) -> str:
     return row[column.strip().casefold()].strip() if column else ""
 
 
-def _money(value: str, mapping: Mapping) -> Decimal:
+def _money(value: str, mapping: Mapping, rounded: list[bool]) -> Decimal:
     if not value:
         return Decimal("0.00")
     if mapping.csv.thousands:
         value = value.replace(mapping.csv.thousands, "")
-    return Decimal(value.replace(mapping.csv.decimal, ".")).quantize(Decimal("0.01"))
+    number = Decimal(value.replace(mapping.csv.decimal, "."))
+    result = number.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+    exponent = number.as_tuple().exponent
+    if isinstance(exponent, int) and exponent < -2:
+        rounded[0] = True
+    return result
 
 
 def transaction(
-    row: dict[str, str], mapping: Mapping, ctx: ImportContext, source_file: str
+    row: dict[str, str], mapping: Mapping, ctx: ImportContext, source_file: str, rounded: list[bool]
 ) -> Transaction | None:
     if mapping.include and _get(row, mapping.include.column) not in mapping.include.allowed:
         return None
@@ -111,13 +159,14 @@ def transaction(
     ts = localise(datetime.strptime(date, mapping.ts.format), ctx.tz)
     amount = mapping.amount
     value = (
-        _money(_get(row, amount.column), mapping)
+        _money(_get(row, amount.column), mapping, rounded)
         if amount.column
-        else _money(_get(row, amount.credit), mapping) - _money(_get(row, amount.debit), mapping)
+        else _money(_get(row, amount.credit), mapping, rounded)
+        - _money(_get(row, amount.debit), mapping, rounded)
     )
     if amount.sign == "invert":
         value = -value
-    value -= _money(_get(row, amount.fee), mapping)
+    value -= _money(_get(row, amount.fee), mapping, rounded)
     raw = _get(row, mapping.description)
     party: str | None = None
     if mapping.counterparty:
@@ -141,13 +190,36 @@ def transaction(
         counterparty=party,
         category=_get(row, mapping.category) or None,
         account=account,
-        balance=_money(_get(row, mapping.balance), mapping) if _get(row, mapping.balance) else None,
+        balance=_money(_get(row, mapping.balance), mapping, rounded)
+        if _get(row, mapping.balance)
+        else None,
         kind=mapping.kind.map.get(_get(row, mapping.kind.column), mapping.kind.default),
     )
 
 
+def validate_headers(headers: Sequence[str] | None, mapping: Mapping) -> None:
+    actual = {h.strip().casefold() for h in headers or []}
+    references: dict[str, str | None] = {
+        "description": mapping.description,
+        "balance": mapping.balance,
+        "category": mapping.category,
+    }
+    for field in ("ts", "amount", "currency", "counterparty", "kind", "include"):
+        model = getattr(mapping, field)
+        if model is not None:
+            for key, column in model.model_dump().items():
+                if key in {"column", "fallback_column", "debit", "credit", "fee"}:
+                    references[f"{field}.{key}"] = column
+    for _, column, _, _ in Formatter().parse(mapping.account):
+        if column is not None:
+            references[f"account.{column}"] = column
+    for field, column in references.items():
+        if column and column.strip().casefold() not in actual:
+            raise MappingError(f"mapping {mapping.id}: field {field}: missing column {column}")
+
+
 def parse(path: Path, ctx: ImportContext, mappings: list[Mapping]) -> Iterator[Transaction]:
-    skipped = 0
+    skipped = rounded_rows = 0
     for file in files(path):
         with streams(file) as sources:
             for name, binary in sources:
@@ -155,16 +227,16 @@ def parse(path: Path, ctx: ImportContext, mappings: list[Mapping]) -> Iterator[T
                 if mapping is None:
                     continue
                 binary.seek(0)
-                with io.TextIOWrapper(binary, encoding=mapping.csv.encoding, newline="") as text:
-                    rows = reader(text, mapping)
-                    relative = file.relative_to(ctx.export_root).as_posix()
-                    source_file = (
-                        f"{relative}/{name}" if file.suffix.lower() == ".zip" else relative
-                    )
-                    with (
-                        tempfile.TemporaryDirectory(prefix="sherd-bank-") as temp,
-                        dbm.open(str(Path(temp) / "occurrences"), "n") as counts,
-                    ):
+                relative = file.relative_to(ctx.export_root).as_posix()
+                source_file = f"{relative}/{name}" if file.suffix.lower() == ".zip" else relative
+                try:
+                    with io.TextIOWrapper(
+                        binary, encoding=mapping.csv.encoding, newline=""
+                    ) as text:
+                        rows = reader(text, mapping)
+                        validate_headers(rows.fieldnames, mapping)
+                        counts: dict[str, int] = {}
+                        current_ts: datetime | None = None
                         for original in rows:
                             first = next(iter(original.values()), "")
                             if mapping.csv.skip_footer_matching and re.search(
@@ -175,13 +247,18 @@ def parse(path: Path, ctx: ImportContext, mappings: list[Mapping]) -> Iterator[T
                                 skipped += 1
                                 continue
                             row = {k.strip().casefold(): v for k, v in original.items()}
+                            rounded = [False]
                             try:
-                                result = transaction(row, mapping, ctx, source_file)
+                                result = transaction(row, mapping, ctx, source_file, rounded)
                             except (ValueError, KeyError, ArithmeticError):
                                 skipped += 1
                                 continue
                             if result is None:
                                 continue
+                            rounded_rows += int(rounded[0])
+                            if result.ts != current_ts:
+                                counts.clear()
+                                current_ts = result.ts
                             fields = (
                                 mapping.id,
                                 result.account,
@@ -191,13 +268,19 @@ def parse(path: Path, ctx: ImportContext, mappings: list[Mapping]) -> Iterator[T
                                 result.merchant_raw,
                                 result.balance,
                             )
-                            key = content_hash(*fields).encode()
-                            occurrence = int(counts.get(key, b"0"))
-                            counts[key] = str(occurrence + 1).encode()
+                            key = content_hash(*fields)
+                            occurrence = counts.get(key, 0)
+                            counts[key] = occurrence + 1
                             yield result.model_copy(
                                 update={"source_row_id": content_hash(*fields, occurrence)}
                             )
+                except UnicodeDecodeError:
+                    raise MappingError(
+                        f"{source_file}: cannot decode CSV; "
+                        f"check mapping {mapping.id} encoding setting"
+                    ) from None
+    logger = logging.getLogger("sherd.connectors.bank_csv")
     if skipped:
-        logging.getLogger("sherd.connectors.bank_csv").warning(
-            "bank_csv skipped malformed records: count=%d", skipped
-        )
+        logger.warning("bank_csv skipped malformed records: count=%d", skipped)
+    if rounded_rows:
+        logger.warning("bank_csv rounded records: count=%d", rounded_rows)

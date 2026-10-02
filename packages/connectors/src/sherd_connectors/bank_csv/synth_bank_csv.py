@@ -25,8 +25,8 @@ class BankCsvGenerator:
             writer = csv.writer(out)
             writer.writerow(HEADERS)
             i = 0
-            # Large descriptions exercise actual streaming, with distinct transaction identities.
-            description = "Fictional Market " + "synthetic " * 40
+            # Short records and distinct timestamps exercise occurrence-counter memory.
+            description = "Fictional Market"
             while out.tell() < approx_bytes:
                 stamp = (datetime(2024, 1, 1) + timedelta(seconds=i + seed)).isoformat(sep=" ")
                 writer.writerow(

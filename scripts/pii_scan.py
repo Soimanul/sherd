@@ -3,6 +3,7 @@
 import argparse
 import re
 import subprocess
+import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
@@ -51,8 +52,14 @@ def findings(line: str) -> Iterator[tuple[str, str]]:
             if 8 <= len(digits) <= 15 and not allowed_phone(value):
                 yield "phone", value
     for match in IBAN.finditer(line):
-        if valid_iban(match.group()):
-            yield "iban", match.group()
+        value = match.group()
+        while True:
+            if valid_iban(value):
+                yield "iban", value
+                break
+            if " " not in value:
+                break
+            value = value.rsplit(" ", 1)[0]
 
 
 def load_allowlist(path: Path) -> set[str]:
@@ -89,11 +96,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         paths = [ROOT / name.decode() for name in tracked.split(b"\0") if name]
     allowlist = load_allowlist(ROOT / ".pii-allowlist")
     found = False
+    failed = False
     for path in paths:
-        for report in scan_file(path, allowlist):
-            print(report)
-            found = True
-    return int(found)
+        try:
+            for report in scan_file(path, allowlist):
+                print(report)
+                found = True
+        except OSError as error:
+            print(f"{path}: cannot read ({error.strerror})", file=sys.stderr)
+            if not (args.all_files and isinstance(error, FileNotFoundError)):
+                failed = True
+    return 2 if failed else int(found)
 
 
 if __name__ == "__main__":

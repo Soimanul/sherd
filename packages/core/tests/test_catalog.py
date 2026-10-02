@@ -21,7 +21,7 @@ def live_schema(store: Store) -> dict[str, list[str]]:
 def test_catalog_describes_every_table_and_column(store: Store) -> None:
     catalog = load_catalog()
     schema = live_schema(store)
-    assert len(schema) == 8
+    assert len(schema) == 9
     assert set(catalog.tables) == set(schema)
     for table, columns in schema.items():
         doc = catalog.tables[table]

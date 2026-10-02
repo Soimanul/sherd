@@ -91,6 +91,12 @@ EXPECTED_COLUMNS: dict[str, list[tuple[str, str, bool]]] = {
         ("created_at", TZ, False),
         ("updated_at", TZ, False),
     ],
+    "contact_decisions": [
+        ("a", "VARCHAR", False),
+        ("b", "VARCHAR", False),
+        ("decision", "VARCHAR", True),
+        ("decided_at", TZ, True),
+    ],
     "imports": [
         ("id", "VARCHAR", False),
         ("connector", "VARCHAR", False),
@@ -123,6 +129,7 @@ EXPECTED_CHECKS: dict[tuple[str, str], set[str]] = {
         "other",
     },
     ("locations", "kind"): {"ping", "visit", "segment"},
+    ("contact_decisions", "decision"): {"merge", "reject"},
     ("imports", "status"): {"running", "succeeded", "failed"},
 }
 
@@ -170,6 +177,7 @@ def test_primary_and_unique_keys(conn: duckdb.DuckDBPyConnection) -> None:
     assert _constraints(conn, "PRIMARY KEY") == {
         *((table, ("id",)) for table in [*FACT_TABLES, "contacts", "imports"]),
         ("schema_meta", ("key",)),
+        ("contact_decisions", ("a", "b")),
     }
     assert _constraints(conn, "UNIQUE") == {
         (table, ("source", "source_row_id")) for table in FACT_TABLES

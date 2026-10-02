@@ -15,6 +15,7 @@ from sherd_connectors import registry
 from sherd_connectors.base import Connector, DetectResult, ImportContext, export_root
 from sherd_connectors.pipeline import run_import
 from sherd_core import Store
+from sherd_core.entities import resolve
 from sherd_core.paths import default_db_path
 from sherd_core.store import StoreError
 
@@ -166,6 +167,16 @@ def dig_export(
             raise DigError(
                 f"{connector.id} could not read {path} ({type(error).__name__}: {error})"
             ) from None
+        try:
+            resolve(store)
+        except Exception as error:
+            # Import has committed; report resolution separately without leaking row contents.
+            Console(stderr=True).print(
+                f"warning: contact resolution failed ({type(error).__name__}); "
+                "run sherd contacts resolve to retry",
+                markup=False,
+                soft_wrap=True,
+            )
     console.print(
         f"Imported with {connector.display_name}: {stats.seen:,} rows seen,"
         f" {stats.inserted:,} new → {db}",

@@ -1,0 +1,23 @@
+# Shipped defaults for `sherd ask` providers. Model ids live here, never in code.
+# Users override with --provider/--model or the "ask" object in $SHERD_HOME/config.json.
+
+# Tried in this order when nothing is configured; the first available provider wins.
+default_order = ["ollama", "anthropic", "openai"]
+
+[ollama]
+model = "qwen2.5-coder:7b"
+host = "http://127.0.0.1:11434"
+
+[anthropic]
+model = "claude-sonnet-5-5"
+api_key_env = "ANTHROPIC_API_KEY"
+max_tokens = 8192
+
+# Sent only with the model above; other Claude models may reject these fields.
+[anthropic.default_model_options]
+effort = "low"
+fallbacks = "default"
+
+[openai]
+# No default model: set one with --model or in config.
+api_key_env = "OPENAI_API_KEY"

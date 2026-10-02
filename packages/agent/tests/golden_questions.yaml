@@ -1,0 +1,188 @@
+# Golden questions over the demo database (`sherd demo`), answered with the stub provider.
+# Each entry: the question, the canned plan the stub returns, and the expected result shape:
+# kind (sql | dig | refuse), columns, and either `rows` (exact) or `rows_min`/`rows_max`;
+# `columns_include` lists columns that must be present; `first` pins values of the first row;
+# `chart` says whether a chart is built. PLAN §7's nightly job (not built yet) is meant to run
+# the same questions against a real provider and compare shapes only.
+
+- question: How many messages did I exchange each year?
+  plan:
+    sql: >-
+      SELECT year(ts AT TIME ZONE 'Europe/Bucharest') AS year, count(*) AS messages
+      FROM messages GROUP BY 1 ORDER BY 1
+  expect: {kind: sql, columns: [year, messages], rows: 4, first: {year: 2023}, chart: false}
+
+- question: How many messages did I send myself?
+  plan:
+    sql: SELECT count(*) AS sent FROM messages WHERE is_from_me
+  expect: {kind: sql, columns: [sent], rows: 1, first: {sent: 10180}}
+
+- question: Which five chats have the most messages?
+  plan:
+    sql: >-
+      SELECT chat_name, count(*) AS messages FROM messages
+      GROUP BY chat_name ORDER BY messages DESC, chat_name LIMIT 5
+  expect: {kind: sql, columns: [chat_name, messages], rows: 5, chart: true}
+
+- question: How many group chats am I in?
+  plan:
+    sql: SELECT count(DISTINCT chat_id) AS group_chats FROM messages WHERE chat_kind = 'group'
+  expect: {kind: sql, columns: [group_chats], rows: 1, first: {group_chats: 6}}
+
+- question: What kinds of media do I send most in chats?
+  plan:
+    sql: >-
+      SELECT media_type, count(*) AS messages FROM messages WHERE kind = 'media'
+      GROUP BY media_type ORDER BY messages DESC
+  expect: {kind: sql, columns: [media_type, messages], rows: 7, chart: true}
+
+- question: How many messages per month did I exchange in 2025?
+  plan:
+    sql: >-
+      SELECT date_trunc('month', ts AT TIME ZONE 'Europe/Bucharest')::DATE AS month,
+      count(*) AS messages FROM messages
+      WHERE year(ts AT TIME ZONE 'Europe/Bucharest') = 2025 GROUP BY 1 ORDER BY 1
+  expect: {kind: sql, columns: [month, messages], rows: 12, chart: true}
+
+- question: Who did I message most?
+  plan:
+    dig: messages.volume_by_contact
+    params: {granularity: year, top_n: 5}
+  expect: {kind: dig, columns: [contact, bucket, messages], rows_min: 5, rows_max: 25}
+
+- question: How did my top contacts change from year to year?
+  plan:
+    dig: messages.top_contacts_by_year
+    params: {top_n: 3}
+  expect: {kind: dig, columns: [contact, year, messages, rank], rows_min: 3, rows_max: 12}
+
+- question: At what time of day am I most active in chats?
+  plan:
+    dig: messages.activity_heatmap
+  expect: {kind: dig, columns: [hour, weekday, messages], rows_min: 24, rows_max: 168}
+
+- question: How fast do I reply compared to my friends?
+  plan:
+    dig: messages.response_times
+  expect: {kind: dig, columns: [contact, side, minutes, replies], rows_min: 2}
+
+- question: Who starts our conversations, me or them?
+  plan:
+    dig: messages.conversation_starters
+    params: {date_from: "2025-01-01", date_to: "2025-12-31"}
+  expect:
+    kind: dig
+    columns: [contact, conversations, started_by_you, your_share, overall_share]
+    rows_min: 1
+    rows_max: 10
+
+- question: What were my longest silences with people?
+  plan:
+    dig: messages.streaks_silences
+  expect: {kind: dig, columns: [contact, streak_days, silence_days], rows_min: 1, rows_max: 10}
+
+- question: Which emoji do I use most each year?
+  plan:
+    dig: messages.emoji_words
+    params: {top_n: 5}
+  expect: {kind: dig, columns: [year, kind, token, count], rows_min: 4, rows_max: 40}
+
+- question: How many hours of music did I listen to each year?
+  plan:
+    sql: >-
+      SELECT year(ts AT TIME ZONE 'Europe/Bucharest') AS year,
+      round(sum(ms_played) / 3600000.0, 1) AS hours
+      FROM media_plays WHERE media_kind = 'track' GROUP BY 1 ORDER BY 1
+  expect: {kind: sql, columns: [year, hours], rows: 4}
+
+- question: Who are my top 10 artists of all time?
+  plan:
+    sql: >-
+      SELECT artist, round(sum(ms_played) / 60000.0) AS minutes FROM media_plays
+      WHERE media_kind = 'track' AND artist IS NOT NULL
+      GROUP BY artist ORDER BY minutes DESC, artist LIMIT 10
+  expect: {kind: sql, columns: [artist, minutes], rows: 10, chart: true}
+
+- question: How many podcast episodes have I played?
+  plan:
+    sql: SELECT count(*) AS episodes FROM media_plays WHERE media_kind = 'episode'
+  expect: {kind: sql, columns: [episodes], rows: 1, first: {episodes: 188}}
+
+- question: What share of my tracks did I skip?
+  plan:
+    sql: >-
+      SELECT round(100.0 * count(*) FILTER (WHERE skipped) / count(*), 1) AS skip_rate_pct
+      FROM media_plays WHERE media_kind = 'track'
+  expect: {kind: sql, columns: [skip_rate_pct], rows: 1}
+
+- question: How much did I spend per category in RON in 2025?
+  plan:
+    sql: >-
+      SELECT category, sum(-amount) AS spent FROM transactions
+      WHERE amount < 0 AND currency = 'RON' AND year(ts AT TIME ZONE 'Europe/Bucharest') = 2025
+      GROUP BY category ORDER BY spent DESC
+  expect: {kind: sql, columns: [category, spent], rows_min: 4, rows_max: 15, chart: true}
+
+- question: How much did I spend on food delivery each month?
+  plan:
+    sql: >-
+      SELECT date_trunc('month', ts AT TIME ZONE 'Europe/Bucharest')::DATE AS month,
+      sum(-amount) AS spent FROM transactions
+      WHERE category = 'food_delivery' AND amount < 0 AND currency = 'RON'
+      GROUP BY 1 ORDER BY 1
+  expect: {kind: sql, columns: [month, spent], rows: 36, chart: true}
+
+- question: Which merchants did I pay most often?
+  plan:
+    sql: >-
+      SELECT merchant, count(*) AS payments FROM transactions
+      WHERE kind = 'card' AND merchant IS NOT NULL
+      GROUP BY merchant ORDER BY payments DESC, merchant LIMIT 10
+  expect: {kind: sql, columns: [merchant, payments], rows: 10, chart: true}
+
+- question: Which currencies do my transactions use?
+  plan:
+    sql: >-
+      SELECT currency, count(*) AS transactions FROM transactions
+      GROUP BY currency ORDER BY transactions DESC
+  expect: {kind: sql, columns: [currency, transactions], rows: 2, first: {currency: RON}}
+
+- question: How many YouTube videos did I watch per year?
+  plan:
+    sql: >-
+      SELECT year(ts AT TIME ZONE 'Europe/Bucharest') AS year, count(*) AS videos
+      FROM events WHERE kind = 'youtube.watch' GROUP BY 1 ORDER BY 1
+  expect: {kind: sql, columns: [year, videos], rows_min: 3, rows_max: 4}
+
+- question: What shell commands do I run most?
+  plan:
+    sql: >-
+      WITH commands AS (
+        SELECT split_part(trim(title), ' ', 1) AS command FROM events
+        WHERE kind = 'shell.command' AND title IS NOT NULL
+      )
+      SELECT command, count(*) AS runs FROM commands
+      GROUP BY command ORDER BY runs DESC, command LIMIT 10
+  expect: {kind: sql, columns: [command, runs], rows: 10, chart: true}
+
+- question: What did I search for on Google most often?
+  plan:
+    sql: >-
+      SELECT title AS query, count(*) AS searches FROM events
+      WHERE kind = 'google.search' GROUP BY title ORDER BY searches DESC, query LIMIT 10
+  expect: {kind: sql, columns: [query, searches], rows: 10}
+
+- question: Where was I on my last holiday?
+  plan:
+    sql: SELECT place_name, min(ts) AS first_seen FROM locations GROUP BY place_name
+  expect: {kind: sql, columns: [place_name, first_seen], rows: 0}
+
+- question: What is the weather in Bucharest tomorrow?
+  plan:
+    refuse: The database holds your exported history, not weather forecasts.
+  expect: {kind: refuse, rows: 0}
+
+- question: Delete all my messages from 2023.
+  plan:
+    refuse: sherd ask only reads your data; it never changes or deletes it.
+  expect: {kind: refuse, rows: 0}

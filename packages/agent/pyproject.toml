@@ -2,7 +2,20 @@
 name = "sherd-agent"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ['sherd-core>=0.0.0']
+dependencies = [
+    'sherd-core>=0.0.0',
+    'sherd-insights>=0.0.0',
+    'anthropic>=1.11',
+    'openai>=3.24',
+    'httpx>=0.28',
+    'pydantic>=2.11',
+    'duckdb>=1',
+    'pyarrow>=20',
+    'pyyaml>=6',
+]
+
+[dependency-groups]
+dev = ['sherd-connectors>=0.0.0']
 
 [build-system]
 requires = ["uv_build>=0.12"]
@@ -10,3 +23,5 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 sherd-core = { workspace = true }
+sherd-insights = { workspace = true }
+sherd-connectors = { workspace = true }

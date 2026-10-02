@@ -328,3 +328,26 @@ def test_invalid_config_shape_is_one_line_error(
     assert result.exit_code == 1
     assert len(one_line_error(result).strip().splitlines()) == 1
     assert path.read_text() == baseline
+
+
+def test_resolution_failure_warns_but_import_succeeds(
+    home: Path, export: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install(monkeypatch, FakeConnector("alpha", 0.9))
+
+    def fail(store: Store) -> None:
+        raise RuntimeError("synthetic detail\nsecond line")
+
+    monkeypatch.setattr(dig, "resolve", fail)
+    result = run(str(export))
+    assert result.exit_code == 0, result.output
+    assert "Imported with Alpha: 3 rows seen, 3 new" in result.stdout
+    assert result.stderr.startswith("warning: contact resolution failed (RuntimeError)")
+    assert len(result.stderr.strip().splitlines()) == 1
+    assert "synthetic detail" not in result.output
+    assert "could not read" not in result.output
+    assert events(home) == 3
+    with Store.open(home / "life.duckdb", read_only=True) as store:
+        assert store.query("SELECT status FROM imports").column("status").to_pylist() == [
+            "succeeded"
+        ]

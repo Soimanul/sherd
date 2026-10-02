@@ -1,0 +1,94 @@
+[
+  {
+    "header": "YouTube",
+    "title": "Watched a video that has been removed",
+    "titleUrl": "https://example.com/watch?v=synthetic",
+    "subtitles": [
+      {
+        "name": "Fictional Studio",
+        "url": "https://example.com/channel/demo"
+      }
+    ],
+    "time": "2024-01-01T10:00:00Z",
+    "products": [
+      "YouTube"
+    ]
+  },
+  {
+    "header": "YouTube",
+    "title": "Watched https://example.com/removed",
+    "titleUrl": "https://example.com/watch?v=synthetic",
+    "subtitles": [
+      {
+        "name": "Fictional Studio",
+        "url": "https://example.com/channel/demo"
+      }
+    ],
+    "time": "2024-01-02T10:00:00Z",
+    "products": [
+      "YouTube"
+    ]
+  },
+  {
+    "header": "YouTube",
+    "title": "Watched Synthetic stars",
+    "titleUrl": "https://example.com/watch?v=synthetic",
+    "subtitles": [
+      {
+        "name": "Fictional Studio",
+        "url": "https://example.com/channel/demo"
+      }
+    ],
+    "time": "2024-01-03T10:00:00Z",
+    "products": [
+      "YouTube"
+    ],
+    "details": [
+      {
+        "name": "From Google Ads"
+      }
+    ]
+  },
+  {
+    "header": "YouTube",
+    "title": "Ați vizionat Synthetic stars",
+    "titleUrl": "https://example.com/watch?v=synthetic",
+    "subtitles": [
+      {
+        "name": "Fictional Studio",
+        "url": "https://example.com/channel/demo"
+      }
+    ],
+    "time": "2024-01-04T10:00:00Z",
+    "products": [
+      "YouTube"
+    ],
+    "details": [
+      {
+        "name": "Din Google Ads"
+      }
+    ]
+  },
+  {
+    "header": "YouTube",
+    "title": "Watched malformed",
+    "products": [
+      "YouTube"
+    ]
+  },
+  {
+    "header": "YouTube",
+    "title": "Watched Synthetic stars",
+    "titleUrl": "https://example.com/watch?v=synthetic",
+    "subtitles": [
+      {
+        "name": "Fictional Studio",
+        "url": "https://example.com/channel/demo"
+      }
+    ],
+    "time": "bad timestamp",
+    "products": [
+      "YouTube"
+    ]
+  }
+]

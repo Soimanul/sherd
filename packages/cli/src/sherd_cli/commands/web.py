@@ -26,7 +26,10 @@ def register(app: typer.Typer) -> None:
             bool, typer.Option("--open/--no-open", help="Open the browser once it is running")
         ] = True,
     ) -> None:
-        """Open your dashboards in the browser. Local only; the database is opened read-only."""
+        """Open your dashboards in the browser. Local only; the database is opened read-only.
+
+        Example: sherd web --demo
+        """
         os.environ["OTEL_SDK_DISABLED"] = "true"
         for name in list(os.environ):
             if name.startswith("OTEL_") and "EXPORTER" in name:

@@ -95,9 +95,9 @@ def choose(
     ]
     if not ask:
         raise DigError(
-            f"cannot tell which connector reads {path}; candidates:\n"
-            + "\n".join(lines)
-            + "\nChoose one with --connector ID.",
+            f"cannot tell which connector reads {path}; candidates: "
+            + "; ".join(line.strip() for line in lines)
+            + ". Choose one with --connector ID.",
             code=2,
         )
     console.print(f"Not sure which connector reads {path}:", highlight=False, markup=False)
@@ -136,7 +136,7 @@ def dig_export(
     console: Console,
 ) -> None:
     if not path.exists():
-        raise DigError(f"no such file or folder: {path}")
+        raise DigError(f"no such file or folder: {path}; check the export path and retry.")
     connectors = registry.discover()
     if not connectors:
         raise DigError("no connectors are installed")
@@ -206,7 +206,10 @@ def register(app: typer.Typer) -> None:
             bool, typer.Option("--yes", "-y", help="Never prompt; exit 2 when detection is unsure")
         ] = False,
     ) -> None:
-        """Import an export: detect its format, then load it into your database."""
+        """Import an export: detect its format, then load it into your database.
+
+        Example: sherd dig exports/chat.txt --connector whatsapp
+        """
         console = Console(soft_wrap=True)
         try:
             dig_export(
@@ -220,13 +223,17 @@ def register(app: typer.Typer) -> None:
             )
         except DigError as error:
             Console(stderr=True, soft_wrap=True).print(
-                f"[red]error:[/] {escape(str(error))}", highlight=False
+                f"[red]error:[/] {escape(' '.join(str(error).splitlines()))}"
+                "; run sherd dig --help.",
+                highlight=False,
             )
             raise typer.Exit(error.code) from None
         except (OSError, ValueError, StoreError, registry.RegistryError, duckdb.Error) as error:
             if os.environ.get(DEBUG_ENV) == "1":
                 raise
             Console(stderr=True, soft_wrap=True).print(
-                f"[red]error:[/] {escape(str(error))}", highlight=False
+                f"[red]error:[/] {escape(' '.join(str(error).splitlines()))}"
+                "; run sherd dig --help.",
+                highlight=False,
             )
             raise typer.Exit(1) from None

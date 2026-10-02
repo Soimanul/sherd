@@ -484,12 +484,12 @@ Work is dispatched to a **tier**, never to a model by name; this table is the on
 | tier | work | current model (since, evidence) |
 | --- | --- | --- |
 | `deep` | contracts and data model (WP-02/03), cross-cutting builds, design with taste (WP-14a/14b/15), plan critiques | Claude Opus 5.5, high (carried over from the Ema S16/S17a head-to-head, 2026-09-25) |
-| `standard` | well-specified builds with logic (connectors, digs, agent pieces); cross-model PR reviews; fix rounds that need judgement | **pending trial T1** (candidates: Claude Sonnet 5.5, Codex `gpt-6.1-sol`) |
-| `light` | mechanical work: scaffolding, config, CI, docs, tests from a list, fix rounds from a findings list | **pending trial T1** (candidates: Claude Haiku 4.5, Codex `gpt-6-luna`) |
+| `standard` | well-specified builds with logic (connectors, digs, agent pieces); fix rounds that need judgement | Codex `gpt-6.1-sol`, medium (2026-10-02, T1); reviewer of a Codex build: Claude Sonnet 5.5 |
+| `light` | mechanical work: scaffolding, config, CI, docs, tests from a list, fix rounds from a findings list | Codex `gpt-6.1-sol`, low (2026-10-02, T1); `gpt-6-luna` stays a candidate for a findings-list fix trial |
 
 The coordinator is Opus and is not a tier. A row changes only on evidence: when a provider releases a model, or two WPs in a row from a tier need more than one fix round, the coordinator runs one trial — candidate and current model on the same WP at the same `dev` commit, a blind cross-model review, cost from the session logs. The cheapest model that matches the best review wins; the row records the date and the trial.
 
-**Trial T1 (2026-10-02):** WP-01 built four times from the same `dev` commit and spec by Haiku 4.5, Sonnet 5.5, `gpt-6.1-sol` (medium) and `gpt-6-luna` (medium); the gate result, a blind review and token cost decide the `standard` and `light` rows. The best build is merged.
+**Trial T1 (2026-10-02):** WP-01 built four times from the same `dev` commit and spec. Result: `gpt-6.1-sol` medium best (blind review 29/30; ≈66k fresh input, 10k output) and merged; Sonnet 5.5 second (24/30; IBAN/phone scanner gaps; fastest; ≈58k cache-write, 22k output); `gpt-6-luna` third (17/30; static-import bypass, unix sockets blocked, thin tests; *more* tokens than sol: ≈98k fresh, 18k output); Haiku 4.5 failed acceptance (`sherd version` broken, a spec rule dropped, while reporting success; ≈137k cache-write, 50k output). Caveats: one task, and the blind reviewer was `gpt-6.1-sol` low; the coordinator re-ran the gates and confirmed the decisive scanner defects independently.
 
 **Budget:** Codex work stops when the weekly Codex limit reaches 30 % used (checked from the Codex session logs before every Codex dispatch).
 
@@ -562,4 +562,4 @@ Definition of "we have a product": `uv tool install sherd-cli && sherd demo && s
 - **Releases:** a `v*` tag on `main` runs `release.yml` (PyPI `sherd-cli`, maturin wheels for `sherd-wa`). The end of Sprint 0 is tagged `v0.0.1` to exercise the flow.
 - **Urgent fixes:** branch from `main`, merge into `main`, then merge `main` back into `dev`.
 - **Branch names:** `wp<nn>-<slug>` for WP work (trial builds: `wp01-<model>`), `fix/<slug>` for fixes, `docs/<slug>` for docs-only changes.
-- The primary checkout stays on `dev` and is only read and pulled by the coordinator; all work happens in Orca worktrees.
+- The primary checkout stays on `dev`; all engineering happens in Orca worktrees. Until the GitHub repo exists, the coordinator merges reviewed WP branches into `dev` locally (after re-running `scripts/check`) and commits `PLAN.md`/`AGENTS.md` updates directly on `dev`.

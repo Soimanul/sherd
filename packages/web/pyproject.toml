@@ -1,0 +1,13 @@
+[project]
+name = "sherd-web"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ['sherd-core>=0.0.0', 'sherd-insights>=0.0.0']
+
+[build-system]
+requires = ["uv_build>=0.12"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+sherd-core = { workspace = true }
+sherd-insights = { workspace = true }

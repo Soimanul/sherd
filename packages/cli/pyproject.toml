@@ -1,0 +1,20 @@
+[project]
+name = "sherd-cli"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ['sherd-core>=0.0.0', 'sherd-connectors>=0.0.0', 'sherd-insights>=0.0.0', 'sherd-agent>=0.0.0', 'sherd-web>=0.0.0', 'sherd-mcp>=0.0.0', 'typer>=0.16', 'rich>=14']
+
+[build-system]
+requires = ["uv_build>=0.12"]
+build-backend = "uv_build"
+
+[project.scripts]
+sherd = "sherd_cli.main:main"
+
+[tool.uv.sources]
+sherd-core = { workspace = true }
+sherd-connectors = { workspace = true }
+sherd-insights = { workspace = true }
+sherd-agent = { workspace = true }
+sherd-web = { workspace = true }
+sherd-mcp = { workspace = true }

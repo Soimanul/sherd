@@ -1,0 +1,1 @@
+"""Discoverable sherd CLI commands."""

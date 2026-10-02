@@ -15,6 +15,7 @@ class DigParams:
     top_n: int = 10
     granularity: Literal["day", "week", "month", "year"] = "month"
     tz: str = "UTC"
+    currency: str | None = None
 
 
 @dataclass(frozen=True)

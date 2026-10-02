@@ -246,7 +246,7 @@ Raw source tables (`raw.<connector>_<name>`) are **optional in v1**: a connector
 ### 4.3 Rules
 
 - `ts` is timezone-aware and stored as UTC. Connectors resolve local times with `ctx.tz` (§5).
-- `source_row_id` must **not** depend on the file name or the export date, so overlapping exports dedupe: use the export's own id when it has one; otherwise sha256 of the normalised record's identifying fields. For line formats where identical records can legitimately repeat (two "ok" messages in the same minute), append the occurrence index among identical records within the chat.
+- `source_row_id` must **not** depend on the file name or the export date, so overlapping exports dedupe: use the export's own id when it has one; otherwise sha256 of the normalised record's identifying fields. For formats where identical records can legitimately repeat (two "ok" messages in the same minute), append the occurrence index among identical records **with the same timestamp**; the counter is kept for the current timestamp only, so memory stays bounded (non-adjacent identical records with the same timestamp may collapse — accepted).
 - Nothing personal in logs. Log counts and ids, never content.
 - Schema changes bump `schema_version` and add a migration in `core/store.py`.
 
@@ -319,6 +319,7 @@ class Connector(Protocol):
 - **Golden tests:** `sherd_connectors.testing.assert_golden(connector, variant_dir)` parses the fixture and compares to `expected.jsonl`; `--update-goldens` rewrites them. A connector PR without golden tests is rejected.
 - `sherd dig` runs `detect` on all registered connectors and picks the best; ties within 0.1 or confidence < 0.5 prompt the user (or fail with a clear message when not interactive).
 - **Demo mode** (`sherd demo`) builds `$SHERD_HOME/demo.duckdb` from every connector's fixtures plus the synthetic generator's "demo" profile, so the UI works with no exports. Screenshots and the landing page use it.
+- **Malformed records:** a record missing a required canonical field is skipped and counted (the count is logged once, no content); one bad row never fails a real export.
 - **Synthetic generator** (`sherd_connectors.synth`, WP-03): deterministic (seeded) generator of canonical rows at a given scale (`demo` ≈ 50k rows; `bench` ≈ 2M rows) and of large raw export files for the memory and Rust benchmarks. Connectors add their raw-file generators in their own `synth_<id>.py` module.
 
 ---

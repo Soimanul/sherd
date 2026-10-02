@@ -1,0 +1,71 @@
+{#- Wrapped (WP-18): the year's share cards as PNGs from /wrapped/<year>/<n>.png, a year
+    picker and the two privacy toggles. Context: cards, year, years, default_year,
+    options, problem, query, fallback_year. -#}
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, empty_state, command, notice %}
+{% from "macros/icons.html" import icon %}
+
+{% block title %}Wrapped{% endblock %}
+
+{% block header %}
+{%- if cards %}
+{{ page_header("Wrapped", "Your " ~ year ~ " in " ~ (cards | length) ~ (" card" if cards | length == 1 else " cards") ~ ", made on this machine. Download one and share it.") }}
+{%- else %}
+{{ page_header("Wrapped", "A year in six cards, made on this machine.") }}
+{%- endif %}
+{% endblock %}
+
+{% block content %}
+{%- if not cards %}
+{% call empty_state("wrapped", {"year": fallback_year}) %}
+{{ command("cmd-wrapped-dig", "sherd dig ~/Downloads/export.zip") }}
+<p class="empty-hint">{{ icon("i-lock") }}<span>{{ t("empty.wrapped.hint") }}</span></p>
+{% endcall %}
+{%- else %}
+{%- if problem %}
+{% call notice("warning", "i-warning") %}{{ problem }}{% endcall %}
+{%- endif %}
+<form class="wrapped-controls" method="get" action="/wrapped" aria-label="Wrapped options">
+  <div class="wrapped-field">
+    <label for="wrapped-year">Year</label>
+    <select class="wrapped-select num" id="wrapped-year" name="year">
+      {%- for y in years %}
+      <option value="{{ y }}"{% if y == year %} selected{% endif %}>{{ y }}{% if y == default_year %} (last full year){% endif %}</option>
+      {%- endfor %}
+    </select>
+  </div>
+  <fieldset class="wrapped-toggles">
+    <legend class="sr-only">What the cards may show</legend>
+    <input type="hidden" name="names" value="0">
+    <label class="wrapped-toggle">
+      <input type="checkbox" name="names" value="1"{% if options.names %} checked{% endif %}>
+      <span class="wrapped-switch" aria-hidden="true"></span>
+      <span class="wrapped-toggle-text"><strong>Names</strong><span>Full contact names instead of initials</span></span>
+    </label>
+    <input type="hidden" name="amounts" value="0">
+    <label class="wrapped-toggle">
+      <input type="checkbox" name="amounts" value="1"{% if options.amounts %} checked{% endif %}>
+      <span class="wrapped-switch" aria-hidden="true"></span>
+      <span class="wrapped-toggle-text"><strong>Amounts</strong><span>Currency amounts on the money cards</span></span>
+    </label>
+  </fieldset>
+  <button class="btn btn-secondary" type="submit">Update cards</button>
+</form>
+<p class="wrapped-note">{{ icon("i-lock") }}<span>{{ t("empty.wrapped.hint") }}{% if not options.names and not options.amounts %} Initials only, no amounts.{% endif %}</span></p>
+
+<ol class="wrapped-deck" aria-label="Cards for {{ year }}">
+  {%- for card in cards %}
+  {%- set src = "/wrapped/" ~ year ~ "/" ~ loop.index ~ ".png?" ~ query %}
+  <li class="wrapped-card">
+    <figure>
+      <img src="{{ src }}" width="1080" height="1350" alt="{{ card.alt }}"{% if not loop.first %} loading="lazy"{% endif %} decoding="async">
+      <figcaption>
+        <span class="wrapped-card-title"><span class="wrapped-card-number num">{{ loop.index }}</span>{{ card.title }}</span>
+        <a class="btn btn-ghost btn-sm" href="{{ src }}" download="wrapped-{{ year }}-{{ loop.index }}.png">{{ icon("i-down") }}<span>PNG<span class="sr-only">, card {{ loop.index }}: {{ card.title }}</span></span></a>
+      </figcaption>
+    </figure>
+  </li>
+  {%- endfor %}
+</ol>
+{%- endif %}
+{% endblock %}

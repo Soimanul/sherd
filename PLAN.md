@@ -336,6 +336,7 @@ class DigParams:
     top_n: int = 10
     granularity: Literal["day", "week", "month", "year"] = "month"
     tz: str = "UTC"                     # IANA zone for local-time bucketing (hours, days); callers pass the user's zone
+    currency: str | None = None         # money digs: ISO 4217; None = the currency with the most transactions in range
 
 @dataclass(frozen=True)
 class Headline:

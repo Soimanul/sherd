@@ -1,0 +1,9 @@
+{
+  "tz": "Europe/Bucharest",
+  "self_identities": [
+    "Alex Demo",
+    "+1 555 0100"
+  ],
+  "description": "multiline-and-unicode",
+  "export": "export/WhatsApp Chat with Mira Example.txt"
+}

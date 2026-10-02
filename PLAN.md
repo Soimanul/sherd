@@ -238,7 +238,8 @@ imports(
   rows_inserted     BIGINT NOT NULL DEFAULT 0,
   status            VARCHAR NOT NULL CHECK (status IN ('running','succeeded','failed'))
 )
-schema_meta(key VARCHAR PRIMARY KEY, value VARCHAR)   -- 'schema_version' = '1'
+contact_decisions(a VARCHAR, b VARCHAR, decision VARCHAR CHECK (decision IN ('merge','reject')), decided_at TIMESTAMPTZ, PRIMARY KEY (a, b))  -- v2 (WP-12)
+schema_meta(key VARCHAR PRIMARY KEY, value VARCHAR)   -- 'schema_version' = '2' after WP-12
 ```
 
 Raw source tables (`raw.<connector>_<name>`) are **optional in v1**: a connector may write them through `ctx.raw(...)`, no acceptance criterion requires them.
@@ -265,12 +266,13 @@ Row = Message | MediaPlay | Transaction | Event | Location
 # store.py — the only module that writes.
 class Store:
     @classmethod
-    def open(cls, path: Path, *, read_only: bool = False) -> "Store": ...   # creates + migrates when writable
+    def open(cls, path: Path, *, read_only: bool = False, sandboxed: bool = False) -> "Store": ...  # creates + migrates when writable; sandboxed = no external access, locked config
     def begin_import(self, connector: str, connector_version: str, path_hash: str, tz: str) -> str: ...
     def upsert(self, import_id: str, source: str, rows: Iterable[Row], batch_size: int = 5000) -> UpsertStats: ...
     def finish_import(self, import_id: str, status: Literal["succeeded", "failed"]) -> UpsertStats: ...  # returns the ledger
     def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table: ...  # parametrised; reads only (see below)
     def table_counts(self) -> dict[str, int]: ...
+    def interrupt(self) -> None: ...                                         # cancel the running query (from another thread)
     def close(self) -> None: ...
 
 @dataclass(frozen=True)

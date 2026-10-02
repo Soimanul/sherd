@@ -1,0 +1,9 @@
+{
+  "tz": "Europe/Bucharest",
+  "self_identities": [
+    "Alex Demo",
+    "+1 555 0100"
+  ],
+  "description": "ios-ro-group",
+  "export": "export/_chat.txt"
+}

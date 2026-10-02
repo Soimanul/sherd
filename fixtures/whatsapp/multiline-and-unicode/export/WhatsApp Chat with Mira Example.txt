@@ -1,0 +1,5 @@
+﻿1/13/24, 9:00 a.m. - Alex Demo: First line
+Second line 🙂
+A timestamp inside text: 1/13/24, 9:30 AM - still text
+1/13/24, 9:01 PM - ‏Mira Example‎: ‪Moon‬ 🌙 ⁦مرحبا⁩
+1/13/24, 9:02 pm - Alex Demo: Keep 👩🏽‍🚀 intact

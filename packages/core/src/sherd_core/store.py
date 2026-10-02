@@ -80,8 +80,12 @@ class Store:
         self._layouts: dict[type[Row], _Layout] = {}
 
     @classmethod
-    def open(cls, path: Path, *, read_only: bool = False) -> "Store":
-        """Open the database at `path`; when writable, create it and migrate it if needed."""
+    def open(cls, path: Path, *, read_only: bool = False, sandboxed: bool = False) -> "Store":
+        """Open the database at `path`; when writable, create it and migrate it if needed.
+
+        `sandboxed=True` disables external access (file and HTTP table functions, ATTACH, COPY,
+        extensions) and locks the configuration, for running untrusted SQL.
+        """
         path = Path(path)
         if read_only and not path.is_file():
             raise FileNotFoundError(f"no sherd database at {path}; import something first")
@@ -100,10 +104,18 @@ class Store:
                     " WHERE status = 'running'",
                     [datetime.now(UTC)],
                 )
+            if sandboxed:
+                conn.execute("SET enable_external_access = false")
+                conn.execute("SET lock_configuration = true")
         except BaseException:
             conn.close()
             raise
-        logger.info("store opened: schema v%d, read_only=%s", SCHEMA_VERSION, read_only)
+        logger.info(
+            "store opened: schema v%d, read_only=%s, sandboxed=%s",
+            SCHEMA_VERSION,
+            read_only,
+            sandboxed,
+        )
         return store
 
     def __enter__(self) -> Self:
@@ -123,6 +135,10 @@ class Store:
 
     def close(self) -> None:
         self._conn.close()
+
+    def interrupt(self) -> None:
+        """Cancel the running query; safe to call from another thread (time budgets)."""
+        self._conn.interrupt()
 
     # -- imports -------------------------------------------------------------------------------
 

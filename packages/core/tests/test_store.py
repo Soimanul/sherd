@@ -1,4 +1,5 @@
 import logging
+import threading
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
@@ -324,6 +325,59 @@ def test_read_only_store_cannot_write(db_path: Path, make_message: MessageFactor
         with pytest.raises(duckdb.InvalidInputException, match="read-only"):
             store._conn.execute("DELETE FROM messages")
         assert store.table_counts()["messages"] == 1
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT * FROM read_csv('{csv}')",
+        "SELECT * FROM read_text('{csv}')",
+        "SELECT * FROM glob('{dir}/*')",
+        "SELECT * FROM 'https://example.com/data.csv'",
+        "ATTACH '{dir}/other.duckdb' AS other",
+        "COPY messages TO '{dir}/out.csv'",
+        "INSTALL httpfs",
+        "LOAD httpfs",
+        "SET threads = 1",
+        "SET enable_external_access = true",
+        "RESET lock_configuration",
+    ],
+)
+def test_sandboxed_store_blocks_external_access_and_config(
+    db_path: Path, make_message: MessageFactory, tmp_path: Path, sql: str
+) -> None:
+    with Store.open(db_path) as store:
+        store.upsert(new_import(store), "whatsapp", [make_message(1)])
+    csv = tmp_path / "data.csv"
+    csv.write_text("a\n1\n")
+    with Store.open(db_path, read_only=True, sandboxed=True) as store:
+        assert store.query("SELECT count(*) AS n FROM messages").to_pylist() == [{"n": 1}]
+        assert store.table_counts()["messages"] == 1
+        with pytest.raises(duckdb.Error):
+            store._conn.execute(sql.format(csv=csv, dir=tmp_path))
+    assert not (tmp_path / "out.csv").exists()
+    assert not (tmp_path / "other.duckdb").exists()
+
+
+def test_unsandboxed_store_can_read_files(db_path: Path, tmp_path: Path) -> None:
+    Store.open(db_path).close()
+    csv = tmp_path / "data.csv"
+    csv.write_text("a\n1\n")
+    with Store.open(db_path, read_only=True) as store:
+        assert store.query(f"SELECT * FROM read_csv('{csv}')").to_pylist() == [{"a": 1}]
+
+
+def test_interrupt_cancels_running_query(db_path: Path) -> None:
+    Store.open(db_path).close()
+    with Store.open(db_path, read_only=True, sandboxed=True) as store:
+        timer = threading.Timer(0.2, store.interrupt)
+        timer.start()
+        try:
+            with pytest.raises(duckdb.InterruptException):
+                store.query("SELECT count(*) FROM range(100000000) a, range(100000000) b")
+        finally:
+            timer.cancel()
+        assert store.query("SELECT 1 AS one").to_pylist() == [{"one": 1}]
 
 
 # -- the database enforces the contract without the models -----------------------------------

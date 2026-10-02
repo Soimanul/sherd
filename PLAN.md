@@ -238,7 +238,8 @@ imports(
   rows_inserted     BIGINT NOT NULL DEFAULT 0,
   status            VARCHAR NOT NULL CHECK (status IN ('running','succeeded','failed'))
 )
-schema_meta(key VARCHAR PRIMARY KEY, value VARCHAR)   -- 'schema_version' = '1'
+contact_decisions(a VARCHAR, b VARCHAR, decision VARCHAR CHECK (decision IN ('merge','reject')), decided_at TIMESTAMPTZ, PRIMARY KEY (a, b))  -- v2 (WP-12)
+schema_meta(key VARCHAR PRIMARY KEY, value VARCHAR)   -- 'schema_version' = '2' after WP-12
 ```
 
 Raw source tables (`raw.<connector>_<name>`) are **optional in v1**: a connector may write them through `ctx.raw(...)`, no acceptance criterion requires them.

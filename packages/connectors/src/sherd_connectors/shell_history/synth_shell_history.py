@@ -9,11 +9,7 @@ class ShellHistoryRaw:
         index = 0
         with path.open("wb") as output:
             while written < approx_bytes:
-                line = (
-                    f": {1704067200 + index}:1;echo fixture-{seed}-{index} "
-                    + "synthetic " * 800
-                    + "\n"
-                ).encode()
+                line = f": {1704067200 + index}:1;echo fixture-{seed}-{index}\n".encode()
                 output.write(line)
                 written += len(line)
                 index += 1

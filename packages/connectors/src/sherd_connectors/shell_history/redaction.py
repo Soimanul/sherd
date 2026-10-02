@@ -3,12 +3,11 @@
 import re
 
 REDACTED = "«redacted»"
-_VALUE = r"""(?:"(?:\\.|[^"\\])*"|'[^']*'|[^\s;"']+)"""
+_VALUE = r"""(?:\$\([^)]*\)|"(?:\\.|[^"\\])*"|'[^']*'|[^\s;"']+)"""
 _PATTERNS = [
     re.compile(rf"(?P<prefix>--(?:password|token|secret|api-key)(?:=|\s+)){_VALUE}", re.I),
-    re.compile(rf"(?P<prefix>(?<!\S)-p){_VALUE}"),
     re.compile(r"""(?P<prefix>Authorization:\s*Bearer\s+)[^\s"']+""", re.I),
-    re.compile(r"(?P<prefix>\b[a-z][a-z0-9+.-]*://)[^\s/@:]+:[^\s/@]+(?=@)", re.I),
+    re.compile(r"(?P<prefix>\b[a-z][a-z0-9+.-]*://)[^\s/@:]+:[^\s/]+(?=@)", re.I),
     re.compile(r"\b(?:ghp_|gho_|github_pat_)[A-Za-z0-9_]+\b"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
     re.compile(r"\bxox[abpr]-[A-Za-z0-9-]+\b"),
@@ -34,6 +33,14 @@ def redact(command: str) -> tuple[str, int]:
         environment,
         command,
     )
+    # Attached -p is a password only for these database clients.
+    if re.match(r"^\s*(?:\S*/)?(?:mysql|mysqldump|mysqladmin|mariadb)(?=\s|$)", command):
+        command, replaced = re.subn(
+            rf"(?P<prefix>(?<!\S)-p){_VALUE}",
+            lambda match: match["prefix"] + REDACTED,
+            command,
+        )
+        count += replaced
     for pattern in _PATTERNS:
         command, replaced = pattern.subn(
             lambda match: match.groupdict().get("prefix", "") + REDACTED, command

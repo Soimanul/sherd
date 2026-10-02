@@ -52,6 +52,17 @@ def context(path: Path) -> ImportContext:
         ("echo sk-short", "echo sk-short", 0),
         ("tool --token-count 3", "tool --token-count 3", 0),
         ("env PATH=/tmp tool", "env PATH=/tmp tool", 0),
+        ("cp -pr a b", "cp -pr a b", 0),
+        ("mkdir -pv x", "mkdir -pv x", 0),
+        ("ls -pF", "ls -pF", 0),
+        ("tar -pxf a", "tar -pxf a", 0),
+        ("psql -p5432", "psql -p5432", 0),
+        ("tool --password-file a", "tool --password-file a", 0),
+        ("export TOKEN=$(cmd arg)", f"export TOKEN={REDACTED}", 1),
+        ("curl https://demo:p@ss@example.com/a", f"curl https://{REDACTED}@example.com/a", 1),
+        ("mysqldump -pdemo", f"mysqldump -p{REDACTED}", 1),
+        ("mysqladmin -pdemo", f"mysqladmin -p{REDACTED}", 1),
+        ("mariadb -pdemo", f"mariadb -p{REDACTED}", 1),
         ("git status -p", "git status -p", 0),
     ],
 )
@@ -60,6 +71,7 @@ def test_redaction_table(command: str, expected: str, count: int) -> None:
 
 
 def test_unmetafy() -> None:
+    assert unmetafy(b"echo plain") == "echo plain"
     assert unmetafy(b"caf\x83\xe3\x83\x89") == "café"
     assert unmetafy(b"\xff\x83") == "��"
 
@@ -105,7 +117,7 @@ def test_rows_multiline_duplicates_and_malformed(caplog: pytest.LogCaptureFixtur
     variant = ROOT / "zsh-extended"
     rows = list(CONNECTOR.parse(export_path(variant), load_meta(variant)))
     assert len(rows) == 4
-    assert rows[0].source_row_id != rows[3].source_row_id
+    assert rows[0].source_row_id == rows[3].source_row_id
     assert rows[1].title == "echo one \\\n  two"
     assert rows[2].title == "echo café"
     assert rows[0].ts.isoformat() == "2024-01-01T00:00:00+00:00"
@@ -124,7 +136,8 @@ def test_atuin_deleted_malformed_privacy_and_read_only(tmp_path: Path) -> None:
     rows = list(CONNECTOR.parse(path, context(path)))
     assert path.read_bytes() == before
     assert [row.source_row_id for row in rows] == ["synthetic-a", "synthetic-b"]
-    assert rows[0].meta == {"shell": "atuin", "duration_ms": 1500.0, "exit": 0, "cwd": "~/project"}
+    assert rows[0].meta == {"shell": "atuin", "duration_ms": 1500, "exit": 0, "cwd": "~/project"}
+    assert type(rows[0].meta["duration_ms"]) is int
     assert rows[0].ts.microsecond == 123456
     assert rows[1].title == f"tool --token={REDACTED}"
     # URI mode=ro must not create a missing database.
@@ -191,4 +204,86 @@ def test_streaming(tmp_path: Path) -> None:
     path = tmp_path / ".zsh_history"
     ShellHistoryRaw().write(path, 50 * 2**20, seed=8)
     assert path.stat().st_size >= 50 * 2**20
+    with path.open("rb") as stream:
+        assert all(len(stream.readline()) < 100 for _ in range(100))
     assert_streaming(CONNECTOR, path, max_rss_mb=200)
+
+
+@pytest.mark.parametrize("shell", ["zsh", "bash"])
+def test_huge_digits_skipped_and_counted(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, shell: str
+) -> None:
+    caplog.set_level(logging.INFO)
+    path = tmp_path / "renamed.history"
+    huge = "9" * 5000
+    text = (
+        f": {huge}:0;echo bad\n: 1704067200:{huge};echo bad\n: 1704067200:0;echo good\n"
+        if shell == "zsh"
+        else f"#{huge}\necho bad\n#1704067200\necho good\n"
+    )
+    path.write_text(text)
+    rows = list(CONNECTOR.parse(path, context(path)))
+    assert [row.title for row in rows] == ["echo good"]
+    assert "skipped lines=2" in caplog.text
+
+
+def test_occurrences_reset_on_timestamp_change(tmp_path: Path) -> None:
+    path = tmp_path / "renamed.history"
+    path.write_text(
+        ": 1704067200:0;echo a\n: 1704067200:0;echo a\n"
+        ": 1704067201:0;echo b\n: 1704067200:0;echo a\n"
+    )
+    rows = list(CONNECTOR.parse(path, context(path)))
+    assert rows[0].source_row_id != rows[1].source_row_id
+    assert rows[0].source_row_id == rows[3].source_row_id
+
+
+@pytest.mark.parametrize(
+    "columns",
+    ["other TEXT", "id TEXT, timestamp INTEGER", "id TEXT, timestamp INTEGER, command TEXT"],
+)
+def test_atuin_schema_detection_and_missing_columns(tmp_path: Path, columns: str) -> None:
+    path = tmp_path / "renamed.db"
+    with sqlite3.connect(path) as conn:
+        conn.execute(f"CREATE TABLE history ({columns})")
+        if "command" in columns:
+            conn.execute(
+                "INSERT INTO history VALUES (?, ?, ?)",
+                ("synthetic-old", 1704067200000000000, "echo demo"),
+            )
+    supported = "command" in columns
+    assert CONNECTOR.detect(path).confidence == (0.95 if supported else 0)
+    rows = list(CONNECTOR.parse(path, context(path)))
+    assert len(rows) == int(supported)
+    if rows:
+        assert rows[0].meta == {"shell": "atuin", "duration_ms": None, "exit": None, "cwd": None}
+
+
+@pytest.mark.parametrize(
+    ("variant", "filename"),
+    [
+        ("zsh-extended", ".zsh_history"),
+        ("bash-timestamped", ".bash_history"),
+        ("atuin", "history.db"),
+    ],
+)
+def test_renamed_files_detected_by_content(tmp_path: Path, variant: str, filename: str) -> None:
+    source = ROOT / variant / "export" / filename
+    path = tmp_path / "backup.history"
+    path.write_bytes(source.read_bytes())
+    assert CONNECTOR.detect(path).confidence >= 0.95
+    assert list(CONNECTOR.parse(path, context(path)))
+
+
+@pytest.mark.parametrize("archived", [False, True])
+def test_unrelated_sqlite_rejected(tmp_path: Path, archived: bool) -> None:
+    database = tmp_path / "history.db"
+    with sqlite3.connect(database) as conn:
+        conn.execute("CREATE TABLE unrelated (id TEXT, timestamp INTEGER, command TEXT)")
+    path = database
+    if archived:
+        path = tmp_path / "history.zip"
+        with ZipFile(path, "w") as archive:
+            archive.write(database, "history.db")
+    assert CONNECTOR.detect(path).confidence == 0
+    assert list(CONNECTOR.parse(path, context(path))) == []

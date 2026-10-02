@@ -1,0 +1,35 @@
+{#- Icon sprite: 16px stroke icons from the design system (static/design/preview.html).
+    Use with icon("i-home"); base.html renders the sprite once per page. -#}
+{% macro sprite() -%}
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2 8 2.8l5.5 4.4v5.8a.5.5 0 0 1-.5.5H10V9.8H6v3.7H3a.5.5 0 0 1-.5-.5Z"/></symbol>
+    <symbol id="i-messages" viewBox="0 0 16 16"><path d="M3 3h10a1 1 0 0 1 1 1v6.2a1 1 0 0 1-1 1H7.2L4.4 13.6v-2.4H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/></symbol>
+    <symbol id="i-music" viewBox="0 0 16 16"><path d="M6 12V3.8l7-1.4v8.2"/><circle cx="4.4" cy="12" r="1.6"/><circle cx="11.4" cy="10.6" r="1.6"/></symbol>
+    <symbol id="i-money" viewBox="0 0 16 16"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="M2 6.5h12M10.5 9.6h1.5"/></symbol>
+    <symbol id="i-timeline" viewBox="0 0 16 16"><path d="M2 8h12M4 5v6M8 6.5v3M12 3.5v9"/></symbol>
+    <symbol id="i-ask" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.7 1.7 0 1 1 2.5 1.5c-.5.3-.8.6-.8 1.1v.3M8 11.3h.01"/></symbol>
+    <symbol id="i-wrapped" viewBox="0 0 16 16"><rect x="2.5" y="5.5" width="11" height="8" rx="1"/><path d="M2.5 8.5h11M8 5.5v8M8 5.5C7 3.4 4.7 3.2 4.8 4.6c.1 1 1.8 1 3.2.9M8 5.5c1-2.1 3.3-2.3 3.2-.9-.1 1-1.8 1-3.2.9"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 16 16"><path d="M2.5 4.5h6M12.5 4.5h1M2.5 11.5h1M7.5 11.5h6"/><circle cx="10.5" cy="4.5" r="1.8"/><circle cx="5.5" cy="11.5" r="1.8"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-6.5"/></symbol>
+    <symbol id="i-warning" viewBox="0 0 16 16"><path d="M8 2.4 14.2 13H1.8Z"/><path d="M8 6.4v3M8 11.2h.01"/></symbol>
+    <symbol id="i-danger" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="m6 6 4 4m0-4-4 4"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 7.4v3.8M8 5.1h.01"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8 13 3.8v4c0 3-2.2 5.3-5 6.4-2.8-1.1-5-3.4-5-6.4v-4Z"/><path d="m5.8 8 1.6 1.6 3-3"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></symbol>
+    <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4"/></symbol>
+    <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 3v10M4 9l4 4 4-4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3.2l1.5 1.6H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.3v9.4L12.4 8Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></symbol>
+    <symbol id="i-owl" viewBox="0 0 16 16"><path d="M3.5 9.5V4l1-1.6 1.6 1.4Q8 3.2 9.9 3.8l1.6-1.4 1 1.6v5.5"/><circle cx="6" cy="7" r="1.4"/><circle cx="10" cy="7" r="1.4"/><path d="M2.5 11.2Q8 9.4 13.5 11.2l-.6 1.8-2.6 1.3L8 13.6l-2.6.8-2.4-1.4Z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 16 16"><path d="M2.5 13.5h11M4.5 13.5V9M8 13.5V4.5M11.5 13.5V7"/></symbol>
+  </defs>
+</svg>
+{%- endmacro %}
+
+{% macro icon(name, class="icon") -%}
+<svg class="{{ class }}" aria-hidden="true" focusable="false"><use href="#{{ name }}"/></svg>
+{%- endmacro %}

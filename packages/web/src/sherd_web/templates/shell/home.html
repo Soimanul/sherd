@@ -1,0 +1,64 @@
+{#- Home (placeholder until WP-15): headline tiles for every available dig and three
+    "start here" charts; the onboarding empty state when there is nothing to show. -#}
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, scale, section, ledger, chart_card, empty_state, command, notice %}
+{% from "macros/icons.html" import icon %}
+
+{% block title %}{{ "Welcome" if onboarding else "Home" }}{% endblock %}
+
+{% block header %}
+{%- if onboarding %}
+{{ page_header(t("onboarding.title"), t("onboarding.intro")) }}
+{%- else %}
+{{ page_header("Home", summary ~ ", all on this machine.") }}
+{{ scale(tiles | length ~ (" finding" if tiles | length == 1 else " findings"), settings.db_path | home_path) }}
+{%- endif %}
+{% endblock %}
+
+{% block content %}
+{%- if onboarding %}
+<div class="onboarding" x-data="commands">
+  {% call empty_state("home", {"db_path": settings.db_path | home_path}) %}
+  <div class="empty-actions">
+    <button class="btn btn-primary btn-lg" type="button" data-command="dig"
+            aria-controls="cmd-dig" aria-expanded="false"
+            x-on:click="toggle" x-bind:aria-expanded="digOpen">
+      {{ icon("i-folder") }}<span>{{ t("empty.home.action") }}</span>
+    </button>
+    <button class="btn btn-secondary btn-lg" type="button" data-command="demo"
+            aria-controls="cmd-demo" aria-expanded="false"
+            x-on:click="toggle" x-bind:aria-expanded="demoOpen">
+      {{ icon("i-play") }}<span>{{ t("empty.home.secondary") }}</span>
+    </button>
+  </div>
+  <div class="command-panel" id="cmd-dig" x-show="digOpen" x-cloak>
+    <p>Run this in a terminal, with the path to an export folder or zip. The page fills in when you reload it.</p>
+    {{ command("cmd-dig-text", "sherd dig ~/Downloads/export.zip") }}
+  </div>
+  <div class="command-panel" id="cmd-demo" x-show="demoOpen" x-cloak>
+    <p>Demo mode builds a separate database of made-up people, songs and payments, then opens it here.</p>
+    {{ command("cmd-demo-text", "sherd demo && sherd web --demo") }}
+  </div>
+  <p class="empty-hint">{{ icon("i-lock") }}<span>{{ t("empty.home.hint", db_path=settings.db_path | home_path) }}</span></p>
+  {% endcall %}
+</div>
+{%- else %}
+{%- if failed %}
+{% call notice("danger", "i-danger") %}
+{{ failed | length }} {{ "dig" if failed | length == 1 else "digs" }} could not be computed: {{ failed | map(attribute="title") | join(", ") }}. Details are in the terminal that runs sherd web.
+{% endcall %}
+{%- endif %}
+
+{% call section("Headlines", "headlines-title") %}
+{{ ledger(tiles, "Headline numbers") }}
+{% endcall %}
+
+{% call section("Start here", "start-title", "Three charts to begin with. Each one has a table behind it.") %}
+<div class="chart-grid">
+  {%- for c in charts %}
+  {{ chart_card(c, demo=settings.demo, wide=loop.first) }}
+  {%- endfor %}
+</div>
+{% endcall %}
+{%- endif %}
+{% endblock %}

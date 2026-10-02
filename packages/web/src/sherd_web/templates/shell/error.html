@@ -1,0 +1,26 @@
+{#- Error pages: 404 and every other status, including 500. -#}
+{% extends "base.html" %}
+{% from "macros/components.html" import owl %}
+{% from "macros/icons.html" import icon %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="empty error-page">
+  {{ owl(120) }}
+  <div class="empty-text">
+    <p class="error-code num">{{ status }}</p>
+    <h1 class="empty-title">{{ title }}.</h1>
+    {%- if status == 404 %}
+    <p class="empty-body">There is no page at <code>{{ path }}</code>. Pages that are still being built show this too.</p>
+    {%- elif detail %}
+    <p class="empty-body">{{ t("errors.generic", detail=detail) }}</p>
+    {%- else %}
+    <p class="empty-body">The server answered {{ status }}. Go back to Home and try again from there.</p>
+    {%- endif %}
+    <div class="empty-actions">
+      <a class="btn btn-primary" href="/">{{ icon("i-home") }}<span>Go to Home</span></a>
+    </div>
+  </div>
+</div>
+{% endblock %}

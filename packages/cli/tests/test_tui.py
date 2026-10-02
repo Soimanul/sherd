@@ -29,7 +29,12 @@ def test_demo_navigation_and_detail(tmp_path: Path) -> None:
                     if choices.option_count:
                         await pilot.press("enter", "enter")
                         assert app.selected_dig is not None
-                        assert app.query_one("#data", DataTable).row_count > 0
+                        table = app.query_one("#data", DataTable)
+                        assert table.row_count > 0
+                        data = app.results[app.selected_dig].data
+                        assert [str(cell) for cell in table.get_row_at(0)] == [
+                            str(data[name][0].as_py()) for name in data.column_names
+                        ]
                         assert str(app.query_one("#narrative", Static).content) == (
                             app.results[app.selected_dig].narrative
                         )
@@ -85,3 +90,55 @@ def test_command_passes_read_only_demo_store(
     result = CliRunner().invoke(create_app(), ["tui", "--demo"])
     assert result.exit_code == 0, result.output
     assert calls == [True]
+
+
+def test_compute_error_tile_preserves_navigation_and_privacy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pyarrow as pa
+    from sherd_insights import DigParams, DigResult, registry
+    from sherd_insights.base import Dig
+
+    class Broken:
+        id = "messages.broken"
+        title = "Broken insight"
+
+        def __init__(self) -> None:
+            self.requires: list[str] = []
+
+        def compute(self, store: Store, params: DigParams) -> DigResult:
+            raise RuntimeError("private synthetic detail")
+
+    class Healthy:
+        id = "messages.healthy"
+        title = "Healthy insight"
+
+        def __init__(self) -> None:
+            self.requires: list[str] = []
+
+        def compute(self, store: Store, params: DigParams) -> DigResult:
+            return DigResult(pa.table({"value": [42]}), None, "Healthy narrative", None, "42")
+
+    digs: list[Dig] = [Broken(), Healthy()]
+    monkeypatch.setattr(registry, "available", lambda store: digs)
+    path = tmp_path / "empty.duckdb"
+    with Store.open(path):
+        pass
+
+    async def drive() -> None:
+        with Store.open(path, read_only=True) as store:
+            app = Dashboard(store)
+            async with app.run_test() as pilot:
+                choices = app.query_one("#headlines", OptionList)
+                assert choices.option_count == 2
+                prompt = str(choices.get_option_at_index(0).prompt)
+                assert prompt == "Broken insight\nError: RuntimeError"
+                await pilot.press("right", "enter")
+                assert str(app.query_one("#narrative", Static).content) == "Error: RuntimeError"
+                assert app.query_one("#data", DataTable).row_count == 0
+                await pilot.press("down", "enter")
+                assert str(app.query_one("#narrative", Static).content) == "Healthy narrative"
+                assert str(app.query_one("#data", DataTable).get_row_at(0)[0]) == "42"
+                await pilot.press("left", "down", "up", "q")
+
+    asyncio.run(drive())

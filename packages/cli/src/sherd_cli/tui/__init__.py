@@ -61,6 +61,7 @@ class Dashboard(App[None]):
         self.selected_dig: str | None = None
         self.digs = registry.available(store)
         self.results: dict[str, DigResult] = {}
+        self.errors: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -90,8 +91,16 @@ class Dashboard(App[None]):
         self.query_one("#data", DataTable).clear(columns=True)
         matching = [dig for dig in self.digs if domain(dig) == name]
         for dig in matching:
-            if dig.id not in self.results:
-                self.results[dig.id] = dig.compute(self.store, self.params)
+            if dig.id not in self.results and dig.id not in self.errors:
+                try:
+                    self.results[dig.id] = dig.compute(self.store, self.params)
+                except Exception as error:
+                    self.errors[dig.id] = type(error).__name__
+            if dig.id in self.errors:
+                choices.add_option(
+                    Option(Text(f"{dig.title}\nError: {self.errors[dig.id]}"), id=dig.id)
+                )
+                continue
             result = self.results[dig.id]
             headline = result.headline
             metric = (
@@ -116,6 +125,12 @@ class Dashboard(App[None]):
             self.action_headlines()
         elif event.option.id:
             self.selected_dig = event.option.id
+            if event.option.id in self.errors:
+                self.query_one("#narrative", Static).update(
+                    f"Error: {self.errors[event.option.id]}"
+                )
+                self.query_one("#data", DataTable).clear(columns=True)
+                return
             result = self.results[event.option.id]
             self.query_one("#narrative", Static).update(result.narrative)
             table = self.query_one("#data", DataTable)

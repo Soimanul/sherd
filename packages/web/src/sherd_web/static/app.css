@@ -1328,7 +1328,7 @@ pre {
 }
 
 .filters-fields .field:has([name="currency"]) {
-  flex-basis: 11rem;
+  flex-basis: 12.5rem;
 }
 
 .filters-actions {
@@ -1402,6 +1402,13 @@ pre {
   gap: var(--space-2);
   max-width: 36rem;
   margin-top: var(--space-6);
+}
+
+/* Wrap rather than scroll: a scrolling line would need its own tab stop. */
+.empty-command .command-text {
+  overflow-x: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ---- Timeline ---------------------------------------------------------------- */
@@ -2197,6 +2204,13 @@ pre {
 
 .data-list code {
   color: var(--color-text);
+}
+
+/* Charts are laid out once, at load. If the window then narrows (a phone turned, a
+   window resized), a fitted chart scales down with its card instead of overflowing. */
+.chart:not(.is-scroll) svg {
+  max-width: 100%;
+  height: auto;
 }
 
 /* ---- Pages: responsive ------------------------------------------------------- */

@@ -1,15 +1,20 @@
 """Read-only stdio MCP tools, with a disclosure budget on every response."""
 
 import asyncio
+import base64
 import json
 import logging
+import math
 import sys
-import time
 from dataclasses import asdict
+from datetime import UTC, date, datetime, time
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import duckdb
+import pyarrow as pa
 from mcp import types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -18,14 +23,15 @@ from sherd_agent import sql_guard
 from sherd_agent.ask import dig_params
 from sherd_core import Store, load_catalog
 from sherd_insights import registry
-from sherd_insights.charts import json_value
 
 MAX_ROWS = 200
 MAX_BYTES = 32 * 1024
 MAX_CELL_CHARS = 500
+MAX_SUMMARY_CHARS = 2000
 BUDGET_DESCRIPTION = (
     " Responses contain at most 200 rows and 32 KB of JSON; cells are limited to 500 "
-    "characters with …; truncated and row_count report disclosure cuts and the original count."
+    "characters with … (narrative/text_summary: 2,000); truncated and row_count report "
+    "disclosure cuts and the original count."
 )
 INSTRUCTIONS = (
     "This database contains personal data. Access is read-only. SQL must be a single SELECT "
@@ -42,21 +48,51 @@ def _json(value: Any) -> str:
 def disclose(rows: list[dict[str, Any]], **metadata: Any) -> types.CallToolResult:
     """Bound cells, records and the serialized MCP result (including JSON escaping)."""
     cut = False
+    non_finite = 0
 
-    def clip(value: Any) -> Any:
-        nonlocal cut
-        value = json_value(value)
+    def clip(value: Any, limit: int = MAX_CELL_CHARS) -> Any:
+        nonlocal cut, non_finite
+        if isinstance(value, float) and not math.isfinite(value):
+            non_finite += 1
+            return None
+        if isinstance(value, bytes):
+            encoded = base64.b64encode(value).decode("ascii")
+            if len(encoded) > limit:
+                cut = True
+                encoded = encoded[: limit // 4 * 4]
+            return {"$blob": encoded, "bytes": len(value)}
+        if isinstance(value, pa.MonthDayNano):
+            seconds = Decimal(value.nanoseconds) / Decimal(1_000_000_000)
+            value = f"P{value.months}M{value.days}DT{seconds:f}S"
+        elif isinstance(value, datetime):
+            value = (value.astimezone(UTC) if value.tzinfo else value).isoformat()
+        elif isinstance(value, date | time):
+            value = value.isoformat()
+        elif isinstance(value, Decimal | UUID):
+            value = str(value)
         if isinstance(value, dict):
             return {clip(str(k)): clip(v) for k, v in value.items()}
-        if isinstance(value, list):
+        if isinstance(value, list | tuple):
             return [clip(v) for v in value]
-        if isinstance(value, str) and len(value) > MAX_CELL_CHARS:
+        if isinstance(value, str) and len(value) > limit:
             cut = True
-            return value[: MAX_CELL_CHARS - 1] + "…"
+            return value[: limit - 1] + "…"
         return value
 
     original = metadata.pop("row_count", len(rows))
-    payload = {**clip(metadata), "rows": [], "row_count": original, "truncated": False}
+    bounded_metadata = {
+        key: clip(
+            value, MAX_SUMMARY_CHARS if key in {"narrative", "text_summary"} else MAX_CELL_CHARS
+        )
+        for key, value in metadata.items()
+    }
+    payload = {
+        **bounded_metadata,
+        "rows": [],
+        "row_count": original,
+        "truncated": False,
+        "non_finite": 0,
+    }
 
     def result() -> types.CallToolResult:
         return types.CallToolResult(content=[types.TextContent(type="text", text=_json(payload))])
@@ -67,23 +103,23 @@ def disclose(rows: list[dict[str, Any]], **metadata: Any) -> types.CallToolResul
 
     for row in rows[:MAX_ROWS]:
         # Nested values are a single cell too, not a way around the cell cap.
-        bounded = {
-            clip(str(k)): clip(
-                _json(json_value(v))
-                if isinstance(v, dict | list) and len(_json(json_value(v))) > MAX_CELL_CHARS
-                else v
-            )
-            for k, v in row.items()
-        }
+        bounded = {}
+        for key, value in row.items():
+            converted = clip(value)
+            if isinstance(value, dict | list | tuple) and len(_json(converted)) > MAX_CELL_CHARS:
+                converted = clip(_json(converted))
+            bounded[clip(str(key))] = converted
+        payload["non_finite"] = non_finite
         payload["rows"].append(bounded)
         payload["truncated"] = True
         if not fits():
             payload["rows"].pop()
             cut = True
             break
+    payload["non_finite"] = non_finite
     payload["truncated"] = cut or len(payload["rows"]) < original
     if not fits():
-        payload = {"rows": [], "row_count": original, "truncated": True}
+        payload = {"rows": [], "row_count": original, "truncated": True, "non_finite": non_finite}
     return result()
 
 
@@ -184,18 +220,16 @@ def create_server(store: Store, *, time_budget_s: float = sql_guard.TIME_BUDGET_
                 return disclose(rows, description=doc.description if doc else "")
             if name == "query":
                 sql = sql_guard.check(arguments["sql"])
-                started = time.monotonic()
-                count = sql_guard.run(
+                # Use the final column position so user aliases cannot collide with the count.
+                data = sql_guard.run(
                     store,
-                    f"SELECT count(*) AS n FROM (\n{sql}\n) AS counted",
-                    row_budget=1,
+                    f"SELECT preview.*, count(*) OVER () FROM (\n{sql}\n) AS preview",
+                    row_budget=MAX_ROWS,
                     time_budget_s=time_budget_s,
-                ).table.to_pylist()[0]["n"]
-                remaining = time_budget_s - (time.monotonic() - started)
-                if remaining <= 0:
-                    raise sql_guard.QueryTimeoutError()
-                data = sql_guard.run(store, sql, row_budget=MAX_ROWS, time_budget_s=remaining).table
-                return disclose(data.to_pylist(), row_count=count)
+                ).table
+                count = data.column(-1)[0].as_py() if data.num_rows else 0
+                preview = data.select(list(range(data.num_columns - 1)))
+                return disclose(preview.to_pylist(), row_count=count)
             digs = {dig.id: dig for dig in registry.available(store)}
             if name == "list_insights":
                 return disclose(
@@ -215,13 +249,18 @@ def create_server(store: Store, *, time_budget_s: float = sql_guard.TIME_BUDGET_
                 text_summary=computed.text_summary,
             )
         except (ValueError, ValidationError, duckdb.Error, sql_guard.QueryTimeoutError) as error:
-            logger.info("tool failed: %s", type(error).__name__)
+            logger.info("%s %s", name, type(error).__name__)
             message = (
                 "query exceeded the time budget"
                 if isinstance(error, sql_guard.QueryTimeoutError)
                 else "request rejected: invalid arguments or prohibited/unavailable data access"
             )
             result = disclose([], error=message)
+            result.isError = True
+            return result
+        except Exception as error:
+            logger.info("%s %s", name, type(error).__name__)
+            result = disclose([], error=type(error).__name__, message="tool execution failed")
             result.isError = True
             return result
 

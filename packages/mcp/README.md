@@ -34,7 +34,11 @@ This is personal data: a client may forward tool results to a remote model.
 Every response is capped at 200 rows and 32 KB of serialized JSON, including
 escaping and envelope space. Cells longer than 500 characters are truncated
 with `…`. `row_count` is the original count and `truncated` indicates any
-row, byte, or cell cut. Query counts the original result before fetching its
-bounded preview; both executions share the 10-second budget. Extremely wide
+row, byte, or cell cut. Query computes the count and preview in one statement within the 10-second
+budget. Narrative and text_summary have a 2,000-character cap. BLOBs use a
+base64 prefix in {"$blob": "...", "bytes": original_size}; temporal values use
+ISO 8601 (aware timestamps use UTC), intervals use ISO durations, and decimals
+and UUIDs use strings. Non-finite numbers become null and are counted in
+non_finite. Maps retain key/value pairs as JSON arrays. Extremely wide
 records may be omitted entirely to fit the byte cap. Long nested cells are
 serialized and truncated as strings.

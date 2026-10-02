@@ -165,3 +165,118 @@ async def test_errors_are_bounded_and_do_not_echo_input(client: ClientSession) -
     assert "personal" not in payload(result)["error"]
     assert (await client.call_tool("describe", {"table": "messages", "extra": True})).isError
     assert (await client.call_tool("run_insight", {"id": "missing"})).isError
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("'ab'::BLOB", {"$blob": "YWI=", "bytes": 2}),
+        ("TIME '10:00'", "10:00:00"),
+        ("DATE '2025-01-01'", "2025-01-01"),
+        ("TIMESTAMP '2025-01-01 10:00:00'", "2025-01-01T10:00:00"),
+        ("TIMESTAMPTZ '2025-01-01 03:00:00+03'", "2025-01-01T00:00:00+00:00"),
+        ("12.34::DECIMAL(18,2)", "12.34"),
+        ("INTERVAL '1 month 2 days 3 seconds'", "P1M2DT3S"),
+        ("[1,2]", [1, 2]),
+        ("{'a': [1,2]}", {"a": [1, 2]}),
+        ("MAP([1,2],['a','b'])", [[1, "a"], [2, "b"]]),
+        ("'00000000-0000-0000-0000-000000000001'::UUID", "00000000-0000-0000-0000-000000000001"),
+    ],
+    ids=[
+        "blob",
+        "time",
+        "date",
+        "timestamp",
+        "timestamptz",
+        "decimal",
+        "interval",
+        "list",
+        "struct",
+        "map",
+        "uuid",
+    ],
+)
+async def test_query_type_serialization(
+    client: ClientSession, expression: str, expected: Any
+) -> None:
+    result = await client.call_tool("query", {"sql": f"SELECT {expression} AS v"})
+    assert not result.isError
+    assert payload(result)["rows"] == [{"v": expected}]
+
+
+@pytest.mark.anyio
+async def test_query_non_finite_recursive(client: ClientSession) -> None:
+    result = await client.call_tool(
+        "query", {"sql": "SELECT ['NaN'::DOUBLE, 'inf'::DOUBLE, '-inf'::DOUBLE] AS v"}
+    )
+    assert not result.isError
+    assert payload(result)["rows"] == [{"v": [None, None, None]}]
+    assert payload(result)["non_finite"] == 3
+
+
+def test_blob_cap_and_summary_cap() -> None:
+    import base64
+    from uuid import UUID
+
+    result = payload(
+        disclose(
+            [{"v": b"x" * 1000, "uuid": UUID(int=1)}], narrative="x" * 1500, text_summary="y" * 2500
+        )
+    )
+    assert len(result["rows"][0]["v"]["$blob"]) == 500
+    assert len(base64.b64decode(result["rows"][0]["v"]["$blob"])) == 375
+    assert result["rows"][0]["v"]["bytes"] == 1000
+    assert result["rows"][0]["uuid"] == str(UUID(int=1))
+    assert len(result["narrative"]) == 1500
+    assert len(result["text_summary"]) == 2000
+    assert result["truncated"]
+
+
+@pytest.mark.anyio
+async def test_unexpected_dig_error_is_safe(
+    client: ClientSession, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    from sherd_insights import registry
+
+    class BrokenDig:
+        id = "broken"
+
+        def compute(self, *args: Any) -> Any:
+            raise KeyError("private data " * 10000)
+
+    monkeypatch.setattr(registry, "available", lambda store: [BrokenDig()])
+    with caplog.at_level(logging.INFO, logger="sherd.mcp"):
+        result = await client.call_tool("run_insight", {"id": "broken"})
+    assert result.isError
+    assert payload(result)["error"] == "KeyError"
+    assert payload(result)["message"] == "tool execution failed"
+    assert "private" not in result.model_dump_json() + caplog.text
+    assert "run_insight KeyError" in caplog.text
+    assert len(result.model_dump_json().encode()) < MAX_BYTES
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("size", [0, 1, 201])
+async def test_query_single_execution(
+    demo_db: Path, monkeypatch: pytest.MonkeyPatch, size: int
+) -> None:
+    calls: list[str] = []
+    original = Store.query
+
+    def tracked(self: Store, sql: str, params: Any = ()) -> Any:
+        calls.append(sql)
+        return original(self, sql, params)
+
+    monkeypatch.setattr(Store, "query", tracked)
+    with Store.open(demo_db, read_only=True, sandboxed=True) as store:
+        async with create_connected_server_and_client_session(create_server(store)) as client:
+            result = await client.call_tool(
+                "query", {"sql": f"SELECT uuid() AS v, 1 AS n FROM range({size})"}
+            )
+    assert not result.isError
+    assert len(calls) == 1
+    assert payload(result)["row_count"] == size
+    assert len(payload(result)["rows"]) == min(size, 200)

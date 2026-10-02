@@ -1,0 +1,6 @@
+Example Bank synthetic statement
+Account summary
+Date;Details;Debit;Credit;Balance;Category
+01.02.2024;Example Grocery;25,50;;1.000,00;groceries
+02.02.2024;Example income;;1.200,00;2.200,00;income
+END OF STATEMENT

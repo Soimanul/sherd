@@ -1,0 +1,77 @@
+[
+  {
+    "ts": "2024-06-01T12:34:56Z",
+    "platform": "synthetic",
+    "ms_played": 180000,
+    "conn_country": "ZZ",
+    "ip_addr": "192.0.2.1",
+    "master_metadata_track_name": "Fictional Orbit",
+    "master_metadata_album_artist_name": "Fictional Lantern Ensemble",
+    "master_metadata_album_album_name": "Imaginary Skies",
+    "spotify_track_uri": "spotify:track:syntheticOrbit",
+    "episode_name": null,
+    "episode_show_name": null,
+    "spotify_episode_uri": null,
+    "audiobook_title": null,
+    "audiobook_uri": null,
+    "audiobook_chapter_uri": null,
+    "audiobook_chapter_title": null,
+    "reason_start": "clickrow",
+    "reason_end": "trackdone",
+    "shuffle": false,
+    "skipped": null,
+    "offline": false,
+    "offline_timestamp": null,
+    "incognito_mode": false,
+    "username": "fictional@example.com",
+    "user_agent_decrypted": "Synthetic Agent"
+  },
+  {
+    "ts": "2024-06-02T00:00:00Z",
+    "platform": null,
+    "ms_played": 180000,
+    "conn_country": "ZZ",
+    "ip_addr": "192.0.2.1",
+    "master_metadata_track_name": null,
+    "master_metadata_album_artist_name": null,
+    "master_metadata_album_album_name": null,
+    "spotify_track_uri": null,
+    "episode_name": null,
+    "episode_show_name": null,
+    "spotify_episode_uri": null,
+    "audiobook_title": null,
+    "audiobook_uri": null,
+    "audiobook_chapter_uri": null,
+    "audiobook_chapter_title": null,
+    "reason_start": "clickrow",
+    "reason_end": "trackdone",
+    "shuffle": null,
+    "skipped": null,
+    "offline": false,
+    "offline_timestamp": null,
+    "incognito_mode": false
+  },
+  {
+    "ts": "2024-06-03T00:00:00Z",
+    "ms_played": 0
+  },
+  {
+    "ts": null,
+    "ms_played": 100
+  },
+  {
+    "ts": "invalid",
+    "ms_played": 100
+  },
+  {
+    "ts": "2024-06-03T00:00:00Z",
+    "ms_played": null
+  },
+  {
+    "ms_played": 10
+  },
+  {
+    "ts": "2024-06-03T00:00:00Z"
+  },
+  null
+]

@@ -1,0 +1,24 @@
+id: example_bank
+display_name: Example Bank (fictional)
+detect:
+  required_headers: [Date, Details, Debit, Credit, Balance, Category]
+csv:
+  delimiter: ';'
+  decimal: ','
+  thousands: '.'
+  skip_rows: 2
+  skip_footer_matching: '^END OF STATEMENT'
+ts:
+  column: Date
+  format: '%d.%m.%Y'
+amount:
+  debit: Debit
+  credit: Credit
+currency:
+  fixed: RON
+description: Details
+balance: Balance
+account: 'example:current'
+category: Category
+kind:
+  default: other

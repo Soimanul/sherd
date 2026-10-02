@@ -2,7 +2,11 @@
 name = "sherd-connectors"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ['sherd-core>=0.0.0']
+dependencies = [
+    'sherd-core>=0.0.0',
+    'ijson>=3.4',
+    'pyyaml>=6',
+]
 
 [build-system]
 requires = ["uv_build>=0.12"]

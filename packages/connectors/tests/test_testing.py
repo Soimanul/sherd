@@ -240,3 +240,24 @@ def test_update_replace_failure_preserves_golden(
         testing.write_golden(connector, variant)
     assert (variant / "expected.jsonl").read_bytes() == baseline
     assert not list(variant.glob(".expected-*.jsonl.tmp"))
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"source_file": "other.lines", "meta": {"synthetic": True}},
+        {"title": None},
+        {"url": "https://example.com/synthetic"},
+    ],
+)
+def test_compatible_duplicates_keep_first(tmp_path: Path, changes: dict[str, object]) -> None:
+    class Compatible(LinesConnector):
+        def parse(self, path: Path, ctx: ImportContext) -> Iterator[Row]:
+            for row in super().parse(path, ctx):
+                yield row
+                yield row.model_copy(update=changes)
+
+    variant = make_variant(tmp_path)
+    assert testing.canonical_rows(Compatible(tmp_path), variant) == testing.canonical_rows(
+        LinesConnector(tmp_path), variant
+    )

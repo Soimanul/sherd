@@ -65,7 +65,8 @@ def canonical_rows(connector: Connector, variant: Path) -> list[CanonicalRow]:
     """Parse a variant into JSON-ready rows as the store would keep them.
 
     Each row gains `"table"`; store-set fields are dropped; a repeated (table, source_row_id)
-    collapses only identical content; conflicting content raises IdCollisionError.
+    collapses compatible content (provenance, metadata or null enrichment differences);
+    conflicting non-null content raises IdCollisionError.
     Rows are sorted by (table, source_row_id).
     """
     rows: dict[tuple[str, str], CanonicalRow] = {}
@@ -80,10 +81,18 @@ def canonical_rows(connector: Connector, variant: Path) -> list[CanonicalRow]:
                 for field in first.keys() | record.keys()
                 if first.get(field) != record.get(field)
             )
-            raise IdCollisionError(
-                f"ID collision in {key[0]} for source_row_id {key[1]!r};"
-                f" differing fields: {', '.join(fields)}"
-            )
+            conflicts = [
+                field
+                for field in fields
+                if field not in {"source_file", "meta"}
+                and first.get(field) is not None
+                and record.get(field) is not None
+            ]
+            if conflicts:
+                raise IdCollisionError(
+                    f"ID collision in {key[0]} for source_row_id {key[1]!r};"
+                    f" differing fields: {', '.join(fields)}"
+                )
         rows.setdefault(key, record)
     return [rows[key] for key in sorted(rows)]
 

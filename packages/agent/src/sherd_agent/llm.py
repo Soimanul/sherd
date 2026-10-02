@@ -7,7 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from sherd_agent import privacy, providers
-from sherd_agent.providers import REMOTE, ChatMessage, Completion, Provider, Settings
+from sherd_agent.providers import (
+    REMOTE,
+    ChatMessage,
+    Completion,
+    Provider,
+    ProviderError,
+    Settings,
+)
+from sherd_agent.providers.base import body_size
 
 logger = logging.getLogger("sherd.agent")
 
@@ -107,7 +115,16 @@ class LLM:
     def complete(
         self, messages: Sequence[ChatMessage], json_schema: Mapping[str, Any] | None = None
     ) -> Completion:
-        completion = self.provider.complete(messages, json_schema=json_schema)
+        try:
+            completion = self.provider.complete(messages, json_schema=json_schema)
+        except ProviderError:
+            # A failed call may still have sent the request; count it rather than under-report.
+            self._record(Completion("", 0, 0, body_size(messages), 0))
+            raise
+        self._record(completion)
+        return completion
+
+    def _record(self, completion: Completion) -> None:
         self.usage.requests += 1
         self.usage.input_tokens += completion.input_tokens
         self.usage.output_tokens += completion.output_tokens
@@ -122,4 +139,3 @@ class LLM:
             completion.input_tokens,
             completion.output_tokens,
         )
-        return completion

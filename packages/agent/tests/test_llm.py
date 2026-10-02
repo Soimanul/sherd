@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from sherd_agent import config, privacy
 from sherd_agent.llm import LLM, NoProviderError, OfflineRefusedError, Probe, resolve
-from sherd_agent.providers import ChatMessage, Completion, Settings, load_settings
+from sherd_agent.providers import ChatMessage, Completion, ProviderError, Settings, load_settings
 from sherd_agent.providers.stub import StubProvider
 
 SETTINGS = load_settings()
@@ -165,3 +165,19 @@ def test_config_validation(home: Path) -> None:
     (home / "config.json").write_text(json.dumps({"ask": []}))
     with pytest.raises(ValueError, match="config ask"):
         config.load()
+
+
+class FailingRemote(RemoteStub):
+    def complete(
+        self, messages: Sequence[ChatMessage], *, json_schema: Mapping[str, Any] | None
+    ) -> Completion:
+        raise ProviderError("anthropic returned HTTP 500")
+
+
+def test_failed_calls_still_count_as_sent(home: Path) -> None:
+    llm = LLM(FailingRemote())
+    with pytest.raises(ProviderError):
+        llm.complete([{"role": "user", "content": "abcd"}])
+    totals = json.loads((home / "privacy.json").read_text())["remote"]["anthropic"]
+    assert (totals["requests"], totals["bytes_sent"], totals["bytes_received"]) == (1, 4, 0)
+    assert llm.usage.requests == 1

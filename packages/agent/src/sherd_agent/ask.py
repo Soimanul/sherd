@@ -110,9 +110,12 @@ def parse_plan(text: str) -> Plan:
     try:
         return _PLAN.validate_python(data)
     except ValidationError as error:
+        problems = "; ".join(
+            f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in error.errors()[:6]
+        )
         raise PlanError(
             'the reply must be exactly one of {"sql": ...}, {"dig": ..., "params": {...}} or '
-            f'{{"refuse": ...}}: {error.error_count()} validation errors'
+            f'{{"refuse": ...}} ({problems})'
         ) from None
 
 

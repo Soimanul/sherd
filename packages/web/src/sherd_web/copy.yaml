@@ -1,0 +1,177 @@
+# sherd UI copy (v1).
+#
+# Voice: calm, precise, a little dry. Say what happened and what to do next.
+# Archaeology words (dig, sherd, layer, find) are seasoning, not a dialect:
+# use one per message at most, and never where a plain word is clearer.
+# Never: "AI", "magic", "smart", "insights powered by", exclamation marks,
+# "Oops", blame ("you forgot"), or promises about data we have not read.
+#
+# Placeholders are {braces}, filled by the template. Numbers arrive formatted.
+# Keys are stable; templates look them up by dotted path, e.g.
+# empty.messages.title. Add keys freely; rename them only with the templates.
+
+product:
+  name: sherd
+  tagline: Your exports, reassembled. On your machine.
+  owl_alt: The sherd owl, holding a pottery sherd
+
+# --- Empty states: one per v1 page -------------------------------------------
+# title: one line. body: one or two sentences that teach what the page needs.
+# action / secondary: button labels (verbs first). hint: optional small print.
+empty:
+  home:
+    title: No sherds yet.
+    body: Point sherd at an export you already have, a WhatsApp chat or a Spotify download, and this page fills with what it finds.
+    action: Start a dig
+    secondary: Try demo mode
+    hint: Nothing is uploaded. Everything stays in {db_path}.
+  messages:
+    title: No messages dug up yet.
+    body: Export a WhatsApp chat (in the app, open a chat, then More, then Export chat) and dig the file. Charts of who you talk to, and when, appear here.
+    action: Dig a chat export
+    secondary: How to export a chat
+  music:
+    title: Silence, so far.
+    body: Request your extended streaming history from Spotify's privacy page. It arrives as a zip in a few days; dig it as it is.
+    action: Dig a Spotify export
+    secondary: How to request it
+  money:
+    title: No transactions yet.
+    body: Download a statement as CSV from your bank and dig it. Revolut works out of the box; other banks need a short column mapping.
+    action: Dig a bank CSV
+    secondary: Map a different bank
+  timeline:
+    title: The timeline needs a first layer.
+    body: Every dig adds a band to the timeline. One export is enough to start; two or more is where it gets interesting.
+    action: Start a dig
+  ask:
+    title: Ask needs something to look at.
+    body: Questions are answered with SQL over your own tables, and there are no tables yet. Dig an export first, or try the demo database.
+    action: Start a dig
+    secondary: Try demo mode
+  ask_no_model:
+    title: Choose a model to ask with.
+    body: Ask turns your question into SQL with a language model. Run one locally with Ollama, or add a key for a remote provider in Settings. The dashboards work without either.
+    action: Set up a model
+    secondary: Use Ollama
+  ask_no_history:
+    title: Ask a question about your data.
+    body: The SQL is always shown above the answer, so you can check it, copy it, or run it yourself.
+    examples:
+      - Who did I message most in 2024?
+      - What did I listen to on Sunday mornings?
+      - How much did I spend on food delivery last year?
+  wrapped:
+    title: Not enough to wrap yet.
+    body: Wrapped needs at least one full year from one source. Dig an export that covers {year}, then come back for the cards.
+    action: Start a dig
+    hint: Cards are made on this machine and contain no message text.
+  settings:
+    title: No connectors in use.
+    body: Connectors appear here after their first dig, with what they read, when, and how many rows they added.
+    action: Start a dig
+  no_results:
+    title: Nothing in this range.
+    body: No rows between {date_from} and {date_to}. Widen the range or clear the filter.
+    action: Clear filters
+  dig_unavailable:
+    title: This chart needs {table}.
+    body: It reads from {table}, which has no rows yet. Dig an export that contains {source_kind} to fill it.
+    action: Start a dig
+
+# --- First-run onboarding ----------------------------------------------------
+onboarding:
+  title: Welcome to sherd.
+  intro: sherd turns the data exports you already own into one private database, then shows you your life in charts. It reads files; it does not log in anywhere.
+  steps:
+    - id: choose
+      title: Start a dig, or look around first
+      body: A dig reads an export folder or zip and imports what it recognises. Demo mode loads a synthetic life (made-up people, made-up songs) so you can see every page before you share anything with sherd.
+      action: Start a dig
+      secondary: Try demo mode
+    - id: point
+      title: Point at an export
+      body: Drop a folder or zip here, or paste its path. Nothing is moved or changed; sherd only reads.
+      field_label: Export folder or zip
+      field_placeholder: ~/Downloads/WhatsApp Chat - Example Family.zip
+      action: Dig
+    - id: confirm
+      title: Check what was found
+      body: sherd says what each file looks like before importing. Confirm, or pick the right connector if it guessed wrong.
+      action: Import
+    - id: done
+      title: First layer in.
+      body: "{rows} rows from {connector}, {date_from} to {date_to}. Digging the same export again adds nothing new, so re-run it whenever you like."
+      action: Open Home
+      secondary: Dig another export
+  demo:
+    banner: Demo mode. Every person, message, song and payment here is made up.
+    exit: Leave demo mode
+    entered: Demo database loaded. Have a look around.
+
+# --- Connector detection (sherd dig) -----------------------------------------
+detect:
+  scanning: Reading {path}…
+  scanning_progress: "{files} files checked"
+  found_one: Looks like a {connector} export ({confidence} match).
+  found_many: Found {count} exports in {path}.
+  tie: "{path} could be {a} or {b}. Which is it?"
+  tie_action: Use this connector
+  low_confidence: This might be a {connector} export, but sherd is not sure ({confidence} match). Import anyway, or choose another connector.
+  low_confidence_action: Import as {connector}
+  unknown: sherd doesn't recognise {path}. It knows {known}. If this is one of those, the export format may have changed; please report it.
+  unknown_action: Choose a connector
+  empty_folder: "{path} has no files sherd can read."
+  not_found: Nothing at {path}. Check the path and try again.
+  unreadable: sherd can't read {path} (permission denied).
+  importing: Importing {connector}…
+  imported: "{inserted} new rows from {connector}. {skipped} were already here."
+  imported_nothing_new: Nothing new. Every row in this export is already in your database.
+  partial: "{inserted} rows imported; {failed} lines couldn't be parsed. Details are in the import log ({import_id})."
+  failed: The import stopped and nothing was saved. {reason}
+  timezone_prompt: This export has no time zone. Which one were you in?
+  timezone_default: Use {tz} (this machine)
+
+# --- Privacy status ----------------------------------------------------------
+# The counter is the big green number on Settings and the badge in the nav.
+privacy:
+  counter_label: sent
+  counter_zero: 0 bytes sent
+  counter_since: since {date}
+  badge_title: Network use since install
+  local_only: Everything stays on this machine.
+  offline: Offline mode. Only loopback connections are allowed; nothing leaves this machine.
+  local_model: Ask uses {provider} on this machine. Questions never leave it.
+  remote_model: Ask uses {provider}, a remote service. Each question you ask sends data to it; the details are listed below.
+  remote_model_counter: "{bytes} sent to {provider}"
+  no_model: No model set up. The dashboards don't need one.
+  no_telemetry: No telemetry, no accounts, no update checks.
+  db_location: Your database is {db_path} ({size}).
+  delete_hint: To erase everything, delete that file. There is no copy anywhere else.
+
+# --- Shared bits -------------------------------------------------------------
+common:
+  view_sql: Show SQL
+  hide_sql: Hide SQL
+  copy_sql: Copy SQL
+  copied: Copied
+  view_table: Show as table
+  view_chart: Show as chart
+  rows: "{count} rows"
+  rows_one: 1 row
+  loading: Digging…
+  retry: Try again
+  cancel: Cancel
+  close: Close
+  chart_summary_label: Chart summary
+  correlation_note: Correlation, not cause.
+  demo_label: Demo data
+
+# --- Errors ------------------------------------------------------------------
+errors:
+  generic: Something went wrong on our side. {detail}
+  query_timeout: That query took longer than {seconds} s and was stopped. Try a narrower date range.
+  query_rows: Showing the first {limit} rows. Add a filter or a LIMIT to see the rest.
+  query_refused: That question would change data, and Ask is read-only. Rephrase it as a question.
+  model_unreachable: Couldn't reach {provider}. Check that it is running, or switch provider in Settings.
+  export_failed: Couldn't write {path}. Check that the folder exists and is writable.

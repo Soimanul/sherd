@@ -268,8 +268,8 @@ class Store:
     def open(cls, path: Path, *, read_only: bool = False) -> "Store": ...   # creates + migrates when writable
     def begin_import(self, connector: str, connector_version: str, path_hash: str, tz: str) -> str: ...
     def upsert(self, import_id: str, source: str, rows: Iterable[Row], batch_size: int = 5000) -> UpsertStats: ...
-    def finish_import(self, import_id: str, status: Literal["succeeded", "failed"], stats: UpsertStats) -> None: ...
-    def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table: ...  # parametrised; read-only use
+    def finish_import(self, import_id: str, status: Literal["succeeded", "failed"]) -> UpsertStats: ...  # returns the ledger
+    def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table: ...  # parametrised; reads only (see below)
     def table_counts(self) -> dict[str, int]: ...
     def close(self) -> None: ...
 
@@ -281,6 +281,9 @@ class UpsertStats:
 # catalog.py — loads catalog.yaml (table/column descriptions for the agent and the docs).
 def load_catalog(path: Path | None = None) -> Catalog: ...
 ```
+
+- **Import ledger:** `upsert` commits per batch and updates `imports.rows_seen`/`rows_inserted` in the same transaction as each batch, so the ledger is exact even when an import fails halfway (the rows already written stay; a re-run inserts the rest). `finish_import` sets `status` and `finished_at` and returns the ledger. Opening a writable store marks any import still `running` as `failed` (DuckDB's file lock means no other writer can be running).
+- **Read-only guarantee:** `query()` on a writable store refuses non-SELECT statements to catch mistakes, but it is not a security boundary (a SELECT can still call side-effecting functions such as `nextval`). Untrusted SQL — the agent, the MCP server — must run on `Store.open(path, read_only=True)`.
 
 Default database path: `$SHERD_HOME/life.duckdb`, `SHERD_HOME` defaulting to `~/.sherd`.
 

@@ -34,7 +34,8 @@ unrecognized or unreadable exports score 0.
 Golden variants are `extended-audio` (two overlapping files, repeated plays, episodes, audiobooks),
 `extended-video` (kind precedence), `extended-old-fields` (old identifying fields, nulls, missing
 required fields), `account-music`, `account-podcast`, `account-legacy-name`, and
-`overlap-cross-format` (repeated music plays and an episode in both formats).
+`overlap-cross-format-extended` / `overlap-cross-format-account` (the same repeated music
+plays and episode, tested together through the store).
 
 ## Mapping to `media_plays`
 
@@ -42,7 +43,7 @@ All exported timestamps are UTC, independent of the import timezone. Offset-bear
 are normalized to UTC. Timestamp seconds are preserved in the canonical row; only identity uses
 minute precision. Missing/null optional fields remain null. Missing, invalid, or negative durations,
 missing/invalid timestamps, and non-object items are skipped; the total count is logged once after
-parsing, without record content. Zero durations are valid. Invalid JSON syntax fails the import.
+parsing, without record content. Zero durations and integral numeric durations (including `1000.0`) are valid. Invalid JSON syntax fails the import.
 
 | Extended field | Canonical mapping |
 | --- | --- |
@@ -54,7 +55,7 @@ parsing, without record content. Zero durations are valid. Invalid JSON syntax f
 | `master_metadata_album_album_name` | `album` |
 | `spotify_track_uri`, `spotify_episode_uri`, `audiobook_chapter_uri` | First nonempty value → `uri` |
 | `shuffle`, `skipped` | Boolean columns; null stays null, never inferred |
-| `reason_start`, `reason_end`, `offline`, `incognito_mode`, `conn_country` | Only these five keys go into `meta`; absent values are null |
+| `reason_start`, `reason_end`, `offline`, `incognito_mode`, `conn_country` | Only these five keys go into `meta`; absent or structured values are null, non-integer numbers are strings |
 | `audiobook_title`, `audiobook_uri`, `audiobook_chapter_uri`, `audiobook_chapter_title` | Any nonempty value selects `media_kind=audiobook` |
 | `episode_name`, `episode_show_name`, `spotify_episode_uri` | Any nonempty value selects `episode`, unless audiobook fields apply |
 
@@ -80,22 +81,25 @@ are also dropped. No raw sink receives source objects, and no record content is 
 
 Both formats use
 `content_hash(UTC minute ISO timestamp, media_kind, artist, track, ms_played, occurrence_index)`.
-Occurrence indices start at zero and count identical identity fields within each history file.
-They distinguish repeated plays without including filename, URI, album, or export date in identity.
-Across files, matching IDs collapse with the first parsed record retained. Separate imports use
-the store's same first-write rule. This aligns overlaps even when timestamps differ in seconds
-and extended rows carry richer metadata. Exports that split repeated identical minute-level plays
-at different file boundaries cannot resolve their occurrence correspondence without a source play
-ID; Spotify supplies none in these formats.
+Occurrence indices start at zero in each file and count identical identity fields only while
+processing the current exact UTC timestamp. The counter clears whenever the timestamp changes
+in parse order. Identical records separated by another timestamp may therefore collapse into
+one stored row, even if their timestamps are equal; this is accepted. Different seconds in the
+same minute can also share an identity. Spotify supplies no source play ID to resolve this.
 
-JSON arrays stream through `ijson`. Occurrence counts and emitted IDs use temporary disk-backed
-`dbm` files containing hashes and counts only, removed when the iterator is exhausted or closed.
-Memory therefore does not grow with play count; sufficient temporary disk space is required.
+All valid records are emitted, including overlaps. Across files and formats matching IDs collapse
+in the store, with the first record retained; the import ledger counts duplicates as seen but
+not inserted. Identity excludes filename, URI, album and export date, aligning richer extended
+records with account rows. Repeated plays split across files can lose their occurrence correspondence.
+
+JSON arrays stream through `ijson`. Only the current timestamp's identity counters are retained
+in memory; there is no disk-backed bookkeeping or export-wide seen set. Memory does not grow
+with the number of distinct timestamps. Within a single timestamp it scales with distinct identities.
 
 ## Synthetic generator
 
 `SpotifyGenerator` implements the framework's `RawGenerator.write(path, approx_bytes, seed)`
-contract. It writes deterministic extended audio history directly to disk with unique play minutes:
+contract. It writes deterministic extended audio history directly to disk with short records, unique play minutes and distinct track identities:
 
 ```sh
 uv run python -m sherd_connectors.spotify.synth_spotify \

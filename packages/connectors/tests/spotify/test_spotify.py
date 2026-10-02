@@ -1,5 +1,6 @@
 import json
 import logging
+import shutil
 import zipfile
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -45,13 +46,18 @@ def test_import_twice_is_idempotent(fixture: Path, tmp_path: Path) -> None:
     with Store.open(tmp_path / "life.duckdb") as store:
         first = run_import(store, CONNECTOR, path, load_meta(fixture))
         second = run_import(store, CONNECTOR, path, load_meta(fixture))
-        assert first.inserted == len(list(CONNECTOR.parse(path, load_meta(fixture)))) > 0
+        assert (
+            first.inserted
+            == len({r.source_row_id for r in CONNECTOR.parse(path, load_meta(fixture))})
+            > 0
+        )
         assert second.inserted == 0
         assert store.table_counts()["media_plays"] == first.inserted
 
 
 def test_overlap_preserves_occurrences_and_collapses_files() -> None:
-    parsed = rows("extended-audio")
+    parsed = list({r.source_row_id: r for r in reversed(rows("extended-audio"))}.values())
+    parsed.reverse()
     assert len(parsed) == 5
     repeats = [r for r in parsed if r.track == "Fictional Orbit"]
     assert len(repeats) == 2
@@ -63,21 +69,28 @@ def test_overlap_preserves_occurrences_and_collapses_files() -> None:
         )
 
 
-def test_cross_format_overlap_uses_extended_first() -> None:
-    parsed = rows("overlap-cross-format")
-    assert len(parsed) == 3
-    assert all(r.uri is not None and "Streaming_History_" in r.source_file for r in parsed)
-    assert {r.source_row_id for r in parsed} == {
-        r.source_row_id for r in rows("account-music") if r.track is not None
-    } | {r.source_row_id for r in rows("account-podcast") if r.track is not None}
+def test_cross_format_overlap_uses_extended_first(tmp_path: Path) -> None:
+    for name in ("overlap-cross-format-account", "overlap-cross-format-extended"):
+        shutil.copytree(export_path(variant(name)), tmp_path, dirs_exist_ok=True)
+    with Store.open(tmp_path / "life.duckdb") as store:
+        stats = run_import(store, CONNECTOR, tmp_path, context(tmp_path))
+        assert (stats.seen, stats.inserted) == (6, 3)
+        assert all(store.query("SELECT uri FROM media_plays").column(0).to_pylist())
+        assert all(
+            isinstance(value, str) and "Streaming_History_" in value
+            for value in store.query("SELECT source_file FROM media_plays").column(0).to_pylist()
+        )
 
 
 @pytest.mark.parametrize("extended_first", [True, False])
 def test_separate_cross_format_imports_first_write_wins(
     extended_first: bool, tmp_path: Path
 ) -> None:
-    fixture = variant("overlap-cross-format")
-    files = list(export_path(fixture).rglob("*.json"))
+    files = [
+        file
+        for name in ("overlap-cross-format-account", "overlap-cross-format-extended")
+        for file in export_path(variant(name)).rglob("*.json")
+    ]
     files.sort(key=lambda p: (p.name.startswith("Streaming_History_") != extended_first, p.name))
     with Store.open(tmp_path / "life.duckdb") as store:
         inserted = [run_import(store, CONNECTOR, p, context(p)).inserted for p in files]
@@ -143,7 +156,7 @@ def test_account_variants_and_utc_independent_of_context() -> None:
 
 
 def test_zip_streaming_without_extraction(tmp_path: Path) -> None:
-    source = export_path(variant("overlap-cross-format"))
+    source = export_path(variant("overlap-cross-format-extended"))
     target = tmp_path / "export.zip"
     with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for file in source.rglob("*.json"):
@@ -151,9 +164,9 @@ def test_zip_streaming_without_extraction(tmp_path: Path) -> None:
         archive.writestr("unrelated.json", '[{"private":"not history"}]')
     assert CONNECTOR.detect(target).confidence == 0.99
     parsed = list(CONNECTOR.parse(target, context(target)))
-    assert len(parsed) == 3
+    assert len({r.source_row_id for r in parsed}) == 3
     assert [r.source_row_id for r in parsed] == [
-        r.source_row_id for r in rows("overlap-cross-format")
+        r.source_row_id for r in rows("overlap-cross-format-extended")
     ]
     assert all(r.source_file.startswith("export.zip/") for r in parsed)
     assert list(tmp_path.iterdir()) == [target]
@@ -252,3 +265,64 @@ def test_invalid_durations_skipped_and_offset_timestamps_normalized(
     assert len(parsed) == 1
     assert parsed[0].ts == datetime(2024, 6, 1, 12, 34, 56, tzinfo=UTC)
     assert caplog.messages == ["parse skipped records: connector=spotify count=4"]
+
+
+def test_occurrences_reset_on_exact_timestamp_change(tmp_path: Path) -> None:
+    path = tmp_path / "Streaming_History_Audio_2024_0.json"
+    record = {"ts": "2024-06-01T12:34:00Z", "ms_played": 1000}
+    path.write_text(json.dumps([record, record, record | {"ts": "2024-06-01T12:34:01Z"}, record]))
+    parsed = list(CONNECTOR.parse(path, context(path)))
+    assert parsed[0].source_row_id != parsed[1].source_row_id
+    assert parsed[0].source_row_id == parsed[2].source_row_id == parsed[3].source_row_id
+    with Store.open(tmp_path / "life.duckdb") as store:
+        stats = run_import(store, CONNECTOR, path, context(path))
+        assert (stats.seen, stats.inserted) == (4, 2)
+
+
+def test_overlap_two_vs_one_counts_every_record(tmp_path: Path) -> None:
+    record = {"ts": "2024-06-01T12:34:00Z", "ms_played": 1000}
+    for index, count in enumerate((2, 1)):
+        (tmp_path / f"Streaming_History_Audio_2024_{index}.json").write_text(
+            json.dumps([record] * count)
+        )
+    parsed = list(CONNECTOR.parse(tmp_path, context(tmp_path)))
+    assert len(parsed) == 3
+    assert parsed[0].source_row_id == parsed[2].source_row_id
+    with Store.open(tmp_path / "life.duckdb") as store:
+        stats = run_import(store, CONNECTOR, tmp_path, context(tmp_path))
+        assert (stats.seen, stats.inserted) == (3, 2)
+        assert (
+            store.query("SELECT source_file FROM media_plays").column(0).to_pylist()
+            == ["Streaming_History_Audio_2024_0.json"] * 2
+        )
+
+
+def test_integral_numeric_duration_and_json_safe_meta(tmp_path: Path) -> None:
+    path = tmp_path / "Streaming_History_Audio_2024_0.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "ts": "2024-06-01T12:34:00Z",
+                    "ms_played": 1000.0,
+                    "reason_start": 1.5,
+                    "reason_end": {"nested": "synthetic"},
+                    "offline": [False],
+                    "incognito_mode": False,
+                    "conn_country": "ZZ",
+                }
+            ]
+        )
+    )
+    parsed = list(CONNECTOR.parse(path, context(path)))
+    assert parsed[0].ms_played == 1000
+    assert parsed[0].meta == {
+        "reason_start": "1.5",
+        "reason_end": None,
+        "offline": None,
+        "incognito_mode": False,
+        "conn_country": "ZZ",
+    }
+    json.dumps(parsed[0].meta)
+    with Store.open(tmp_path / "life.duckdb") as store:
+        assert run_import(store, CONNECTOR, path, context(path)).inserted == 1

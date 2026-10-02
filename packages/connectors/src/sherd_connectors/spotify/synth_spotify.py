@@ -20,22 +20,8 @@ class SpotifyGenerator:
             while written < approx_bytes:
                 record = {
                     "ts": (start + timedelta(minutes=index)).isoformat(),
-                    "platform": "synthetic",
                     "ms_played": rng.randint(1000, 240000),
-                    "master_metadata_track_name": f"Fictional Orbit {index % 100}",
-                    "master_metadata_album_artist_name": "Fictional Lantern Ensemble",
-                    "master_metadata_album_album_name": "Imaginary Skies",
-                    "spotify_track_uri": f"spotify:track:synthetic{index % 100}",
-                    "episode_name": None,
-                    "episode_show_name": None,
-                    "spotify_episode_uri": None,
-                    "shuffle": bool(index % 2),
-                    "skipped": False,
-                    "reason_start": "trackdone",
-                    "reason_end": "trackdone",
-                    "offline": False,
-                    "incognito_mode": False,
-                    "conn_country": "ZZ",
+                    "master_metadata_track_name": f"Fictional {index}",
                 }
                 line = json.dumps(record, separators=(",", ":")).encode() + b"\n"
                 if index:

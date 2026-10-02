@@ -1,13 +1,12 @@
 """Spotify streaming-history connector; all timestamps are exported in UTC."""
 
-import dbm
 import logging
 import re
-import tempfile
 import zipfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import IO, Any, Literal
 from zoneinfo import ZoneInfo
@@ -23,6 +22,7 @@ _NAME = re.compile(
     r"\.json$"
 )
 _META = ("reason_start", "reason_end", "offline", "incognito_mode", "conn_country")
+UTC_ZONE = ZoneInfo("UTC")
 Kind = Literal["track", "episode", "video", "audiobook"]
 
 
@@ -85,6 +85,12 @@ def _row(record: object, source_file: str) -> MediaPlay | None:
     extended = PurePosixPath(source_file).name.startswith("Streaming_History_")
     time = _text(record, "ts" if extended else "endTime")
     duration = record.get("ms_played" if extended else "msPlayed")
+    if (isinstance(duration, float) and duration.is_integer()) or (
+        isinstance(duration, Decimal)
+        and duration.is_finite()
+        and duration == duration.to_integral_value()
+    ):
+        duration = int(duration)
     if time is None or type(duration) is not int or duration < 0:
         return None
     try:
@@ -126,7 +132,15 @@ def _row(record: object, source_file: str) -> MediaPlay | None:
             or _text(record, "spotify_episode_uri")
             or _text(record, "audiobook_chapter_uri")
         )
-        meta = {field: record.get(field) for field in _META}
+        meta = {
+            field: value
+            if value is None or isinstance(value, (str, bool, int))
+            else str(value)
+            if isinstance(value, (float, Decimal))
+            else None
+            for field in _META
+            for value in (record.get(field),)
+        }
     else:
         if "podcast" in PurePosixPath(source_file).name or any(
             _text(record, field) for field in ("podcastName", "episodeName")
@@ -154,7 +168,7 @@ def _row(record: object, source_file: str) -> MediaPlay | None:
 
 class SpotifyConnector:
     id = "spotify"
-    version = "1"
+    version = "2"
     display_name = "Spotify"
 
     def detect(self, path: Path) -> DetectResult:
@@ -181,35 +195,30 @@ class SpotifyConnector:
 
     def parse(self, path: Path, ctx: ImportContext) -> Iterator[MediaPlay]:
         skipped = 0
-        # Disk-backed hash-only bookkeeping bounds memory even for unsorted multi-year exports.
-        # Per-file occurrence counts preserve legitimate repeats; emitted IDs collapse overlaps.
-        with (
-            tempfile.TemporaryDirectory(prefix="sherd-spotify-") as scratch,
-            dbm.open(str(Path(scratch) / "seen"), "n") as seen,
-            _files(path, ctx) as files,
-        ):
+        with _files(path, ctx) as files:
             for source_file, stream in files:
-                with dbm.open(str(Path(scratch) / "counts"), "n") as counts:
-                    for record in ijson.items(stream, "item"):
-                        row = _row(record, source_file)
-                        if row is None:
-                            skipped += 1
-                            continue
-                        fields = (
-                            row.ts.replace(second=0, microsecond=0).isoformat(),
-                            row.media_kind,
-                            row.artist,
-                            row.track,
-                            row.ms_played,
-                        )
-                        key = content_hash(*fields).encode("ascii")
-                        occurrence = int(counts.get(key, b"0"))
-                        counts[key] = str(occurrence + 1).encode("ascii")
-                        identity = content_hash(*fields, occurrence)
-                        if identity.encode("ascii") in seen:
-                            continue
-                        seen[identity] = b"1"
-                        yield row.model_copy(update={"source_row_id": identity})
+                counts: dict[str, int] = {}
+                current_timestamp: datetime | None = None
+                for record in ijson.items(stream, "item"):
+                    row = _row(record, source_file)
+                    if row is None:
+                        skipped += 1
+                        continue
+                    if row.ts != current_timestamp:
+                        counts.clear()
+                        current_timestamp = row.ts
+                    fields = (
+                        row.ts.replace(second=0, microsecond=0).isoformat(),
+                        row.media_kind,
+                        row.artist,
+                        row.track,
+                        row.ms_played,
+                    )
+                    key = content_hash(*fields)
+                    occurrence = counts.get(key, 0)
+                    counts[key] = occurrence + 1
+                    identity = content_hash(*fields, occurrence)
+                    yield row.model_copy(update={"source_row_id": identity})
         if skipped:
             logger.warning("parse skipped records: connector=spotify count=%d", skipped)
 
@@ -218,5 +227,4 @@ class SpotifyConnector:
         return sorted(p for p in root.iterdir() if (p / "meta.json").is_file())
 
 
-UTC_ZONE = ZoneInfo("UTC")
 CONNECTOR = SpotifyConnector()

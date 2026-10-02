@@ -223,7 +223,7 @@ def _correlation(store: Store, params: DigParams, *, money: bool) -> DigResult:
         else ("a positive relationship" if r > 0 else "a negative relationship")
     )
     note = _currency_note(currency, params) if money and currency else ""
-    statistic = f"r = {r:.3f}" if r is not None else "r is undefined (insufficient variation)"
+    statistic = f"r = {r:.2f}" if r is not None else "r is undefined (insufficient variation)"
     chart: dict[str, Any] = charts.apply_theme(
         {
             "data": {"values": charts.records(data)},
@@ -257,7 +257,9 @@ def _correlation(store: Store, params: DigParams, *, money: bool) -> DigResult:
         chart,
         f"Across {n} local ISO weeks, {x_label.lower()} and {y_label.lower()} "
         f"had {description} ({statistic}). This is a correlation, not a cause." + note,
-        Headline(f"Pearson correlation · {n} weeks", r if r is not None else "Undefined", "r"),
+        Headline(
+            f"Pearson correlation · {n} weeks", round(r, 2) if r is not None else "Undefined", "r"
+        ),
         f"Weekly scatter of {x_label.lower()} versus {y_label.lower()}; {statistic}, "
         f"n = {n}. Weeks observed in either stream are included; missing activity "
         "in the other stream is zero. Correlation, not a cause." + note,

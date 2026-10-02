@@ -148,3 +148,68 @@ def test_error_suffix_is_a_sentence(
     result = CliRunner().invoke(create_app(), args)
     assert result.exit_code == 1, result.output
     assert result.stderr.strip() == f"error: Synthetic failure. Run sherd {command} --help."
+
+
+@pytest.mark.parametrize("verbose", [False, True])
+def test_demo_logging_requires_verbose(tmp_path: Path, verbose: bool) -> None:
+    args = [*(["--verbose"] if verbose else []), "demo", "--db", str(tmp_path / "demo.duckdb")]
+    result = CliRunner().invoke(create_app(), args)
+    assert result.exit_code == 0, result.output
+    assert "Demo database" in result.stdout
+    assert "skipped" not in result.stdout.lower()
+    assert ("skipped" in result.stderr.lower()) is verbose
+    if verbose:
+        assert "INFO sherd.connectors.spotify: parse skipped records" in result.stderr
+
+
+@pytest.mark.parametrize("verbose", [False, True])
+def test_dig_summarizes_malformed_records(tmp_path: Path, verbose: bool) -> None:
+    export = tmp_path / "StreamingHistory0.json"
+    export.write_text("[{}, {}]")
+    args = [
+        *(["--verbose"] if verbose else []),
+        "dig",
+        str(export),
+        "--connector",
+        "spotify",
+        "--db",
+        str(tmp_path / "life.duckdb"),
+    ]
+    result = CliRunner().invoke(create_app(), args)
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines()[-1] == "Skipped 2 malformed records"
+    assert "Imported with Spotify" in result.stdout
+    assert ("skipped" in result.stderr.lower()) is verbose
+
+
+@pytest.mark.parametrize(
+    ("verbose", "debug", "expected"),
+    [
+        (False, False, ["WARNING"]),
+        (True, False, ["INFO", "WARNING"]),
+        (False, True, ["DEBUG", "INFO", "WARNING"]),
+        (True, True, ["DEBUG", "INFO", "WARNING"]),
+    ],
+)
+def test_library_log_levels_and_cleanup(
+    monkeypatch: pytest.MonkeyPatch, verbose: bool, debug: bool, expected: list[str]
+) -> None:
+    import logging
+
+    test_app = create_app()
+
+    @test_app.command()
+    def log_levels() -> None:
+        logger = logging.getLogger("sherd.synthetic")
+        logger.debug("synthetic debug")
+        logger.info("synthetic info")
+        logger.warning("synthetic warning")
+
+    monkeypatch.setenv("SHERD_DEBUG", "1" if debug else "0")
+    root = logging.getLogger()
+    handlers, level = list(root.handlers), root.level
+    result = CliRunner().invoke(test_app, [*(["--verbose"] if verbose else []), "log-levels"])
+    assert result.exit_code == 0, result.output
+    assert [line.split()[0] for line in result.stderr.splitlines()] == expected
+    assert root.handlers == handlers
+    assert root.level == level

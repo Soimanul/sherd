@@ -1,5 +1,6 @@
 """`sherd dig PATH`: detect an export's connector and import it (PLAN §5)."""
 
+import logging
 import os
 import sys
 from collections.abc import Mapping
@@ -159,6 +160,18 @@ def dig_export(
         if identities:
             console.print(f"Treating {len(identities)} identities as you (change with --me)")
         ctx = ImportContext(export_root(path), ZoneInfo(zone), frozenset(identities))
+        # Import locally to avoid a cycle with module-based command discovery.
+        from sherd_cli.main import malformed_count
+
+        class SkippedRecords(logging.Handler):
+            count = 0
+
+            def emit(self, record: logging.LogRecord) -> None:
+                self.count += malformed_count(record)
+
+        skipped = SkippedRecords()
+        logger = logging.getLogger()
+        logger.addHandler(skipped)
         try:
             stats = run_import(store, connector, path, ctx)
         except Exception as error:
@@ -167,6 +180,9 @@ def dig_export(
             raise DigError(
                 f"{connector.id} could not read {path} ({type(error).__name__}: {error})"
             ) from None
+        finally:
+            logger.removeHandler(skipped)
+            skipped.close()
         try:
             resolve(store)
         except Exception as error:
@@ -183,6 +199,9 @@ def dig_export(
         highlight=False,
         markup=False,
     )
+
+    if skipped.count:
+        console.print(f"Skipped {skipped.count} malformed records", highlight=False, markup=False)
 
 
 def register(app: typer.Typer) -> None:

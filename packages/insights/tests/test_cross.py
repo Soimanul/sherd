@@ -431,3 +431,24 @@ def test_timeline_normalizes_each_stream_and_preserves_locations_counts() -> Non
     assert color["scale"]["domain"] == [0, 100]
     assert color["title"] == "share of the stream's busiest period"
     assert any(t["field"] == "activity" for t in result.chart["encoding"]["tooltip"])
+
+
+@pytest.mark.parametrize("metric", ["spend_vs_listening", "messages_vs_youtube"])
+def test_correlation_display_rounds_without_rounding_data(store: Store, metric: str) -> None:
+    rows: list[Row] = []
+    for week, (x, y) in enumerate([(1, 1), (2, 2), (3, 4)]):
+        ts = (datetime(2024, 1, 1) + timedelta(weeks=week)).isoformat() + "+00:00"
+        if metric == "spend_vs_listening":
+            rows += [transaction(f"t{week}", ts, str(-x)), play(f"p{week}", ts, minutes=y)]
+        else:
+            rows.extend(message(f"m{week}-{i}", ts) for i in range(x))
+            rows.extend(event(f"e{week}-{i}", ts) for i in range(y))
+    insert(store, rows)
+    got = compute(store, metric)
+    r = got.data.to_pylist()[0]["r"]
+    assert r == pytest.approx(0.981980506062)
+    assert r != round(r, 2)
+    assert got.headline
+    assert got.headline.value == 0.98
+    assert "r = 0.98)" in got.narrative
+    assert "r = 0.98," in got.text_summary

@@ -88,6 +88,8 @@ def register(app: typer.Typer) -> None:
                 if dig_id is None:
                     for dig in registry.available(store):
                         computed = dig.compute(store, params)
+                        if not computed.data.num_rows:
+                            continue
                         h = computed.headline
                         label = f"{h.label}: {h.value} {h.unit or ''}" if h else computed.narrative
                         console.print(f"{dig.id}: {label}", markup=False, highlight=False)

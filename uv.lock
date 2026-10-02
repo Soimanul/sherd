@@ -733,6 +733,7 @@ name = "sherd-cli"
 version = "0.0.0"
 source = { editable = "packages/cli" }
 dependencies = [
+    { name = "duckdb" },
     { name = "rich" },
     { name = "sherd-agent" },
     { name = "sherd-connectors" },
@@ -745,6 +746,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "duckdb", specifier = ">=1" },
     { name = "rich", specifier = ">=14" },
     { name = "sherd-agent", editable = "packages/agent" },
     { name = "sherd-connectors", editable = "packages/connectors" },

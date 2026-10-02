@@ -94,3 +94,19 @@ def test_failed_parse_marks_import_failed_and_reraises(tmp_path: Path, export: P
 def test_export_root_of_a_file_is_its_directory(export: Path) -> None:
     assert export_root(export) == export
     assert export_root(export / "history.txt") == export
+
+
+def test_immediate_parse_failure_records_failed_import(tmp_path: Path, export: Path) -> None:
+    class ImmediateFailure(CountingConnector):
+        def parse(self, path: Path, ctx: ImportContext) -> Iterator[Row]:
+            raise ValueError("invalid header")
+
+    with Store.open(tmp_path / "db.duckdb") as store:
+        with pytest.raises(ValueError, match="invalid header"):
+            run_import(store, ImmediateFailure(0), export, context(export))
+        [ledger] = imports(store)
+        assert ledger["status"] == "failed"
+        assert ledger["rows_seen"] == ledger["rows_inserted"] == 0
+        assert store.query("SELECT finished_at IS NOT NULL FROM imports").to_pylist() == [
+            {"(finished_at IS NOT NULL)": True}
+        ]

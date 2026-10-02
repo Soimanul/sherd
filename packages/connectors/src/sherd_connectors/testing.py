@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,10 @@ STORE_FIELDS = frozenset({"id", "source", "import_id", "imported_at"})
 _DIFF_LIMIT = 5
 
 CanonicalRow = dict[str, Any]
+
+
+class IdCollisionError(ValueError):
+    """Distinct canonical rows share a connector-provided identity."""
 
 
 def variants(connector: Connector) -> list[Path]:
@@ -60,13 +65,26 @@ def canonical_rows(connector: Connector, variant: Path) -> list[CanonicalRow]:
     """Parse a variant into JSON-ready rows as the store would keep them.
 
     Each row gains `"table"`; store-set fields are dropped; a repeated (table, source_row_id)
-    keeps its first occurrence, like the store; rows are sorted by (table, source_row_id).
+    collapses only identical content; conflicting content raises IdCollisionError.
+    Rows are sorted by (table, source_row_id).
     """
     rows: dict[tuple[str, str], CanonicalRow] = {}
     for row in connector.parse(export_path(variant), load_meta(variant)):
         record = {k: v for k, v in row.model_dump(mode="json").items() if k not in STORE_FIELDS}
         record["table"] = row.table_name
-        rows.setdefault(_key(record), record)
+        key = _key(record)
+        if key in rows and rows[key] != record:
+            first = rows[key]
+            fields = sorted(
+                field
+                for field in first.keys() | record.keys()
+                if first.get(field) != record.get(field)
+            )
+            raise IdCollisionError(
+                f"ID collision in {key[0]} for source_row_id {key[1]!r};"
+                f" differing fields: {', '.join(fields)}"
+            )
+        rows.setdefault(key, record)
     return [rows[key] for key in sorted(rows)]
 
 
@@ -77,9 +95,25 @@ def _dumps(row: CanonicalRow) -> str:
 def write_golden(connector: Connector, variant: Path) -> Path:
     """(Re)write `variant/expected.jsonl` from the connector's current output."""
     target = variant / "expected.jsonl"
-    with target.open("w", encoding="utf-8", newline="\n") as out:
-        for row in canonical_rows(connector, variant):
-            out.write(_dumps(row) + "\n")
+    rows = canonical_rows(connector, variant)
+    partial: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=variant,
+            prefix=".expected-",
+            suffix=".jsonl.tmp",
+            delete=False,
+        ) as out:
+            partial = Path(out.name)
+            for row in rows:
+                out.write(_dumps(row) + "\n")
+        os.replace(partial, target)
+    finally:
+        if partial is not None:
+            partial.unlink(missing_ok=True)
     return target
 
 

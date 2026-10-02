@@ -296,3 +296,35 @@ def test_ambiguity_rule() -> None:
     assert not dig.ambiguous(ranked(0.9, 0.79))
     assert dig.ambiguous(ranked(0.9, 0.8))
     assert dig.ambiguous(ranked())
+
+
+@pytest.mark.parametrize("me_args", [[], ["--me", "Alex Demo"]], ids=["read", "write"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        {"connectors": []},
+        {"connectors": {"alpha": []}},
+        {"connectors": {"alpha": {"me": "Alex Demo"}}},
+        {"connectors": {"alpha": {"me": [123]}}},
+        {"connectors": {"other": {"me": None}}},
+    ],
+)
+def test_invalid_config_shape_is_one_line_error(
+    home: Path,
+    export: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    me_args: list[str],
+    data: object,
+) -> None:
+    install(monkeypatch, FakeConnector("alpha", 0.9))
+    home.mkdir()
+    path = home / "config.json"
+    baseline = json.dumps(data)
+    path.write_text(baseline)
+    with pytest.raises(ValueError, match=r"must (hold|be)"):
+        config.load()
+    result = run(str(export), *me_args)
+    assert result.exit_code == 1
+    assert len(one_line_error(result).strip().splitlines()) == 1
+    assert path.read_text() == baseline

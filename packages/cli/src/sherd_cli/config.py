@@ -20,6 +20,17 @@ def load() -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"{path} must hold a JSON object")
+    connectors = data.get("connectors", {})
+    if not isinstance(connectors, dict):
+        raise ValueError("config connectors must be an object")
+    for connector_id, settings in connectors.items():
+        if not isinstance(settings, dict):
+            raise ValueError(f"config connector {connector_id!r} must be an object")
+        identities = settings.get("me", [])
+        if not isinstance(identities, list) or any(
+            not isinstance(value, str) for value in identities
+        ):
+            raise ValueError(f"config connector {connector_id!r} me must be a list of strings")
     return data
 
 

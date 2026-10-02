@@ -1,4 +1,5 @@
 import json
+import os
 from collections import Counter
 from collections.abc import Iterator
 from datetime import datetime
@@ -109,17 +110,17 @@ def test_canonical_rows(connector: LinesConnector, variant: Path) -> None:
     assert first["source_file"] == "sub/history.lines"
 
 
-def test_canonical_rows_keep_first_duplicate(tmp_path: Path) -> None:
+def test_canonical_rows_collapse_identical_duplicates(tmp_path: Path) -> None:
     class Twice(LinesConnector):
         def parse(self, path: Path, ctx: ImportContext) -> Iterator[Row]:
             for row in super().parse(path, ctx):
                 yield row
-                yield row.model_copy(update={"title": "second copy"})
+                yield row
 
     variant = make_variant(tmp_path)
     rows = testing.canonical_rows(Twice(tmp_path), variant)
     assert len(rows) == 4
-    assert "second copy" not in {row["title"] for row in rows}
+    assert rows == testing.canonical_rows(LinesConnector(tmp_path), variant)
 
 
 def test_update_writes_golden_then_passes(
@@ -179,3 +180,63 @@ def test_update_rewrites_a_stale_golden(
     monkeypatch.delenv(testing.UPDATE_ENV)
     testing.assert_golden(connector, variant)
     assert "old" not in (variant / "expected.jsonl").read_text()
+
+
+@pytest.mark.parametrize("update", [False, True])
+def test_conflicting_duplicate_raises_id_collision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, update: bool
+) -> None:
+    class Conflict(LinesConnector):
+        def parse(self, path: Path, ctx: ImportContext) -> Iterator[Row]:
+            for row in super().parse(path, ctx):
+                yield row
+                yield row.model_copy(update={"title": "conflicting private content"})
+
+    variant = make_variant(tmp_path)
+    connector = LinesConnector(tmp_path)
+    testing.write_golden(connector, variant)
+    baseline = (variant / "expected.jsonl").read_bytes()
+    first = next(connector.parse(testing.export_path(variant), testing.load_meta(variant)))
+    if update:
+        monkeypatch.setenv(testing.UPDATE_ENV, "1")
+    with pytest.raises(testing.IdCollisionError) as error:
+        testing.assert_golden(Conflict(tmp_path), variant)
+    assert str(error.value) == (
+        f"ID collision in events for source_row_id {first.source_row_id!r}; differing fields: title"
+    )
+    assert "conflicting private content" not in str(error.value)
+    assert (variant / "expected.jsonl").read_bytes() == baseline
+
+
+def test_update_parse_failure_preserves_golden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Broken(LinesConnector):
+        def parse(self, path: Path, ctx: ImportContext) -> Iterator[Row]:
+            yield next(super().parse(path, ctx))
+            raise ValueError("invalid record")
+
+    variant = make_variant(tmp_path)
+    testing.write_golden(LinesConnector(tmp_path), variant)
+    baseline = (variant / "expected.jsonl").read_bytes()
+    monkeypatch.setenv(testing.UPDATE_ENV, "1")
+    with pytest.raises(ValueError, match="invalid record"):
+        testing.assert_golden(Broken(tmp_path), variant)
+    assert (variant / "expected.jsonl").read_bytes() == baseline
+    assert not list(variant.glob(".expected-*.jsonl.tmp"))
+
+
+def test_update_replace_failure_preserves_golden(
+    connector: LinesConnector, variant: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    testing.write_golden(connector, variant)
+    baseline = (variant / "expected.jsonl").read_bytes()
+
+    def fail_replace(source: Path, target: Path) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+    with pytest.raises(OSError, match="replace failed"):
+        testing.write_golden(connector, variant)
+    assert (variant / "expected.jsonl").read_bytes() == baseline
+    assert not list(variant.glob(".expected-*.jsonl.tmp"))

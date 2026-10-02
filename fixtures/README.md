@@ -43,7 +43,11 @@ directories. Each variant covers one shape of the export (an OS, a locale, an ol
 One canonical row per line, as `sherd_connectors.testing.canonical_rows` produces it: the row's
 `model_dump(mode="json")` plus `"table"`, without the store-set fields (`id`, `source`,
 `import_id`, `imported_at`), keys sorted, rows sorted by (`table`, `source_row_id`). A repeated
-(`table`, `source_row_id`) keeps its first occurrence, as the store does.
+(`table`, `source_row_id`) with identical canonical content keeps its first occurrence, as
+the store does. Different content for the same identity raises `IdCollisionError`, naming
+the table, source row id and differing fields without including the content. Both comparison
+and update mode reject these collisions; updates replace the golden atomically only after
+parsing and canonicalisation succeed.
 
 Do not write it by hand. Create or refresh it with
 

@@ -4,7 +4,7 @@ Open exactly one writable `Store` per process: opening a second one marks the ru
 of the first as failed.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from sherd_core import Row, Store, UpsertStats, path_hash
@@ -37,11 +37,15 @@ def import_rows(
 
 def run_import(store: Store, connector: Connector, path: Path, ctx: ImportContext) -> UpsertStats:
     """Parse the export at `path` with `connector` and upsert its rows into `store`."""
+
+    def sources() -> Iterator[tuple[str, Iterable[Row]]]:
+        yield connector.id, connector.parse(path, ctx)
+
     return import_rows(
         store,
         connector.id,
         connector.version,
         path_hash(path),
         ctx.tz.key,
-        [(connector.id, connector.parse(path, ctx))],
+        sources(),
     )

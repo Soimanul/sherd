@@ -115,3 +115,79 @@ def test_the_page_only_opens_read_only_stores(
     assert http.get("/wrapped/2025/1.png").status_code == 200
     assert calls
     assert all(call.get("read_only") is True for call in calls)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["²", "2" * 5000, "1", "0001", "\uff12\uff10\uff12\uff15", "+2025", "02025", "1999", "9999"],
+)
+def test_invalid_years_fall_back_and_pngs_return_404(
+    bad: str, demo_db: Path, client: ClientFactory
+) -> None:
+    http = client(demo_db)
+    got = http.get("/wrapped", params={"year": bad})
+    assert got.status_code == 200
+    assert "nothing to wrap for that year" in got.text
+    assert card_sources(got.text)[0].startswith("/wrapped/2025/1.png")
+    assert http.get(f"/wrapped/{bad}/1.png").status_code == 404
+
+
+def test_adversarial_labels_never_reach_cards_alt_or_html(
+    tmp_path: Path, client: ClientFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+
+    from sherd_connectors import synth
+    from sherd_core import Message, Transaction
+    from sherd_insights import registry
+    from sherd_insights.base import DigParams, DigResult
+    from sherd_insights.wrapped import WrappedOptions, build
+
+    hostile = "Ana Pop 1,234.56 RON"
+    path = tmp_path / "hostile.duckdb"
+    with Store.open(path) as store:
+        key = store.begin_import("synthetic", "1", "hostile", "UTC")
+
+        def rows() -> Any:
+            for row in synth.generate("demo"):
+                if isinstance(row, Message):
+                    row = row.model_copy(update={"chat_name": hostile, "sender_name": hostile})
+                elif isinstance(row, Transaction):
+                    row = row.model_copy(update={"category": hostile, "merchant": hostile})
+                yield row
+
+        store.upsert(key, "synthetic", rows())
+        store.finish_import(key, "succeeded")
+
+    # Every dig's headline label is unrestricted input, even when its values are numeric.
+    def poison(original: Any) -> Any:
+        def compute(self: Any, store: Store, params: DigParams) -> DigResult:
+            result: DigResult = original(self, store, params)
+            if result.headline is not None:
+                result = replace(result, headline=replace(result.headline, label=hostile))
+            return result
+
+        return compute
+
+    classes = {type(dig) for dig in registry.discover().values()}
+    for cls in classes:
+        monkeypatch.setattr(cls, "compute", poison(cls.compute))
+    with Store.open(path, read_only=True) as store:
+        cards = build(store, 2025, WrappedOptions(tz="UTC"))
+        assert {card.key for card in cards} == {
+            "numbers",
+            "circle",
+            "soundtrack",
+            "rhythm",
+            "money",
+            "change",
+        }
+        for card in cards:
+            for output in (str(card.spec), card.alt, card.title):
+                assert hostile not in output
+                assert "Ana Pop" not in output
+                assert "1,234.56" not in output
+    got = client(path).get("/wrapped?year=2025")
+    assert got.status_code == 200
+    for sensitive in (hostile, "Ana Pop", "1,234.56"):
+        assert sensitive not in got.text

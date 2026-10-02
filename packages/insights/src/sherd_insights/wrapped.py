@@ -104,7 +104,7 @@ ARROW_UP = "M0,-1L0.78,-0.12L0.26,-0.12L0.26,1L-0.26,1L-0.26,-0.12L-0.78,-0.12Z"
 ARROW_FLAT = "M1,0L0.12,0.78L0.12,0.26L-1,0.26L-1,-0.26L0.12,-0.26L0.12,-0.78Z"
 
 # Friendlier names for trends.yoy rows, by dig id. Labels from the dig itself can hold a
-# contact or track name, so a dig without an entry falls back to its title, never its label.
+# contact or track name; unknown digs use a fixed phrase, never result labels or titles.
 CHANGE_NAMES: dict[str, tuple[str, str]] = {
     "messages.activity_heatmap": (
         "Night-owl index",
@@ -1103,10 +1103,7 @@ def _covers(y: _Year, by: date) -> bool:
 
 def _change_name(row: dict[str, Any]) -> tuple[str, str]:
     dig_id = str(row["dig_id"])
-    if dig_id == "money.spend_by_category":
-        category = str(row["label"]).replace("_", " ")
-        return f"Spending on {category}", "Your biggest category, in both years"
-    return CHANGE_NAMES.get(dig_id, (str(row["dig_title"]), ""))
+    return CHANGE_NAMES.get(dig_id, ("Your year in review", ""))
 
 
 def _span(row: dict[str, Any], amounts: bool) -> str | None:

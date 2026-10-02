@@ -65,6 +65,14 @@ def deck(store: Store, db_path: Path, year: int, options: WrappedOptions) -> Dec
     return built
 
 
+def _year(value: str) -> int | None:
+    """Bound conversion before accepting an ASCII four-digit calendar year."""
+    if len(value) != 4 or not value.isascii() or not value.isdigit():
+        return None
+    parsed = int(value)
+    return parsed if 1000 <= parsed <= 9999 else None
+
+
 def _query(year: int, options: WrappedOptions) -> str:
     return f"year={year}&names={int(options.names)}&amounts={int(options.amounts)}"
 
@@ -83,13 +91,14 @@ def wrapped_page(
     if store is None:
         return render(request, "pages/wrapped.html", {**context, "cards": []})
     counts = store.table_counts()
-    available = cards.years(store, options.tz)[:YEARS_SHOWN]
+    available = [y for y in cards.years(store, options.tz) if 1000 <= y <= 9999]
     default = cards.default_year(store, options.tz)
     chosen = default
     problem = None
-    if year:
-        if year.isdigit() and int(year) in available:
-            chosen = int(year)
+    if year is not None:
+        parsed = _year(year)
+        if parsed in available:
+            chosen = parsed
         else:
             problem = "There is nothing to wrap for that year, so the default year is shown."
     if chosen is None and available:
@@ -103,7 +112,7 @@ def wrapped_page(
             "counts": counts,
             "cards": built,
             "year": chosen,
-            "years": available,
+            "years": available[:YEARS_SHOWN],
             "default_year": default,
             "problem": problem,
             "query": _query(chosen, options) if chosen else "",
@@ -115,15 +124,18 @@ def wrapped_page(
 def wrapped_png(
     store: StoreDep,
     settings: SettingsDep,
-    year: int,
+    year: str,
     number: int,
     names: Annotated[str | None, Query()] = None,
     amounts: Annotated[str | None, Query()] = None,
 ) -> Response:
-    if store is None or not 1 <= year <= 9999:
+    parsed = _year(year)
+    if store is None or parsed is None:
         raise HTTPException(status_code=404)
     options = _options(names, amounts)
-    found = deck(store, settings.db_path, year, options)
+    if parsed not in cards.years(store, options.tz):
+        raise HTTPException(status_code=404)
+    found = deck(store, settings.db_path, parsed, options)
     if not 1 <= number <= len(found.cards):
         raise HTTPException(status_code=404)
     with _lock:

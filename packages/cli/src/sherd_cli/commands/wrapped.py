@@ -41,7 +41,10 @@ def register(app: typer.Typer) -> None:
             bool, typer.Option(help="Use the demo database built by `sherd demo`")
         ] = False,
     ) -> None:
-        """Make your year's Wrapped cards as PNG files. Nothing leaves this machine."""
+        """Make your year's Wrapped cards as PNG files. Nothing leaves this machine.
+
+        Example: sherd wrapped 2025 --demo --out wrapped
+        """
         errors = Console(stderr=True)
         try:
             if db is not None and demo:

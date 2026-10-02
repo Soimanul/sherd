@@ -145,3 +145,71 @@ def test_reserved_phone_range() -> None:
 def test_international_length_boundaries(digits: int) -> None:
     value = "+" + "4" * digits
     assert list(pii_scan.findings(value)) == [("phone", value)]
+
+
+@pytest.mark.parametrize("prose", [" NOTE", " note"])
+def test_grouped_iban_followed_by_prose(prose: str) -> None:
+    value = iban()
+    grouped = " ".join(value[index : index + 4] for index in range(0, len(value), 4))
+    assert list(pii_scan.findings(grouped + prose)) == [("iban", grouped)]
+
+
+def test_lowercase_iban() -> None:
+    value = iban().lower()
+    assert list(pii_scan.findings(value)) == [("iban", value)]
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["a07" + "12345678" + "b" * 21, str(1_700_000_000), ".".join(["1", "2", "3", "4567890"])],
+)
+def test_non_pii_identifiers(value: str) -> None:
+    assert not list(pii_scan.findings(value))
+
+
+def test_missing_file_exit_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(pii_scan, "ROOT", tmp_path)
+    path = tmp_path / "missing.txt"
+    assert pii_scan.main([str(path)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == f"{path}: cannot read (No such file or directory)\n"
+
+
+def test_unreadable_file_exit_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import errno
+
+    monkeypatch.setattr(pii_scan, "ROOT", tmp_path)
+    path = tmp_path / "unreadable.txt"
+    path.write_text("safe")
+
+    def denied_open(self: Path, *args: object, **kwargs: object) -> object:
+        assert self == path
+        raise PermissionError(errno.EACCES, "Permission denied", str(path))
+
+    monkeypatch.setattr(Path, "open", denied_open)
+    assert pii_scan.main([str(path)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == f"{path}: cannot read (Permission denied)\n"
+
+
+def test_all_skips_deleted_tracked_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    path = tmp_path / "deleted.txt"
+    path.write_text("safe")
+    subprocess.run(["git", "-C", str(tmp_path), "add", path.name], check=True)
+    path.unlink()
+    monkeypatch.setattr(pii_scan, "ROOT", tmp_path)
+    assert pii_scan.main(["--all"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == f"{path}: cannot read (No such file or directory)\n"

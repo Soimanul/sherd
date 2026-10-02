@@ -268,8 +268,8 @@ class Store:
     def open(cls, path: Path, *, read_only: bool = False) -> "Store": ...   # creates + migrates when writable
     def begin_import(self, connector: str, connector_version: str, path_hash: str, tz: str) -> str: ...
     def upsert(self, import_id: str, source: str, rows: Iterable[Row], batch_size: int = 5000) -> UpsertStats: ...
-    def finish_import(self, import_id: str, status: Literal["succeeded", "failed"], stats: UpsertStats) -> None: ...
-    def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table: ...  # parametrised; read-only use
+    def finish_import(self, import_id: str, status: Literal["succeeded", "failed"]) -> UpsertStats: ...  # returns the ledger
+    def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table: ...  # parametrised; reads only (see below)
     def table_counts(self) -> dict[str, int]: ...
     def close(self) -> None: ...
 
@@ -281,6 +281,9 @@ class UpsertStats:
 # catalog.py — loads catalog.yaml (table/column descriptions for the agent and the docs).
 def load_catalog(path: Path | None = None) -> Catalog: ...
 ```
+
+- **Import ledger:** `upsert` commits per batch and updates `imports.rows_seen`/`rows_inserted` in the same transaction as each batch, so the ledger is exact even when an import fails halfway (the rows already written stay; a re-run inserts the rest). `finish_import` sets `status` and `finished_at` and returns the ledger. Opening a writable store marks any import still `running` as `failed` (DuckDB's file lock means no other writer can be running).
+- **Read-only guarantee:** `query()` on a writable store refuses non-SELECT statements to catch mistakes, but it is not a security boundary (a SELECT can still call side-effecting functions such as `nextval`). Untrusted SQL — the agent, the MCP server — must run on `Store.open(path, read_only=True)`.
 
 Default database path: `$SHERD_HOME/life.duckdb`, `SHERD_HOME` defaulting to `~/.sherd`.
 
@@ -456,12 +459,12 @@ Paths are relative to `packages/<pkg>/src/<import name>/` unless they start at t
 | 11 | Cross-source digs + trends data | `digs/cross_*.py`, `digs/trends.py` | 09, 10 | Life timeline < 1 s on the `bench` profile (2M rows); YoY deltas. |
 | 12 | Entity resolution (contacts) | `sherd_core/entities.py`, `sherd_cli/commands/contacts.py` | 02, 04, 07 | Fuzzy-merge names/phones across WhatsApp and bank transfers; user-confirmable merges; never auto-merge below threshold. |
 | 13 | Agent: LLM client, providers, SQL guard, ask | `packages/agent`, `sherd_cli/commands/ask.py` | 02, 09 | Contract D; 20 golden questions in CI with a stub provider; `--offline` enforced by a network-blocking test that allows loopback. |
-| 14a | Design system: tokens, owl, chart theme, copy | `sherd_web/static/{tokens.css,owl.svg,fonts/,vendor/}`, `sherd_web/static/design/`, `sherd_insights/theme/`, `sherd_web/copy.yaml` | – | Tokens (contrast-checked), owl SVG, Vega theme JSON, a static preview page rendering sample charts with the theme, empty-state and onboarding copy. |
+| 14a | Design system: tokens, owl, chart theme, copy | `sherd_web/static/{tokens.css,owl.svg,owl-mark.svg,fonts/,vendor/}`, `sherd_web/static/design/`, `sherd_insights/theme/`, `sherd_web/copy.yaml` | – | Tokens (contrast-checked), owl SVG, Vega theme JSON, a static preview page rendering sample charts with the theme, empty-state and onboarding copy. |
 | 14b | Web shell | `sherd_web/{app.py,templates/base*,templates/macros/}`, `sherd_cli/commands/web.py` | 09, 14a | Layout, nav, empty states; renders the demo DB; no external requests (CSP test). |
 | 15 | Web pages | `sherd_web/routes/`, `sherd_web/templates/pages/` | 11, 13, 14b | All pages render on the demo DB; Lighthouse a11y ≥ 90; CSP test. |
 | 16 | CLI + TUI polish | `sherd_cli/tui/`, `sherd_cli/commands/export.py`, help/error texts | 09, 13 | `sherd dig/ask/show/demo/wrapped/export`; TUI dashboard; helpful errors. |
 | 17 | MCP server | `packages/mcp` | 13 | stdio MCP with read-only query, describe, insights; tested with an MCP client. |
-| 18 | Wrapped generator | `sherd_insights/wrapped.py`, `sherd_cli/commands/wrapped.py` | 10, 11, 14a | 6 PNG cards from the demo DB; deterministic; no raw text by default. |
+| 18 | Wrapped generator | `sherd_insights/wrapped.py`, `sherd_cli/commands/wrapped.py` | 10, 11, 14a | 6 PNG cards from the demo DB; deterministic; no raw text by default; registers `sherd_web/static/fonts/ttf/` with vl-convert (it ignores woff2) and a test proves the PNG uses Fira Sans. |
 | 19 | Rust WhatsApp parser | `crates/sherd-wa` | 04 | Same golden tests through PyO3; ≥10× faster on a 1 GB synthetic export; wheels built in CI. |
 | 20 | Packaging + install + docs + landing | `docs/`, `.github/workflows/release.yml`, install script | 15, 16 | `uv tool install sherd-cli`, `pipx install sherd-cli` and a `curl … \| sh` install script work on a clean macOS and Linux machine; docs site builds. |
 | 21 | Launch kit | `docs/launch/` | 18, 20 | Show HN text, Reddit posts, 60-s GIF script, FAQ, Wrapped share flow tested. |

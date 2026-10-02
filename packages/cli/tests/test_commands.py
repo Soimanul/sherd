@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -28,3 +29,20 @@ def test_module_without_register(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     result = CliRunner().invoke(discovered, ["version"])
     assert result.exit_code == 0
     assert result.output == "sherd 0.0.0\n"
+
+
+def test_discovery_runs_temporary_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "temporary_command.py").write_text(
+        "import typer\n"
+        "def register(app):\n"
+        "    @app.command()\n"
+        "    def temporary():\n"
+        "        typer.echo('discovered command ran')\n"
+    )
+    monkeypatch.setattr(commands, "__path__", [*commands.__path__, str(tmp_path)])
+    # Restore the import cache as well as the package path after discovery.
+    monkeypatch.setitem(sys.modules, "sherd_cli.commands.temporary_command", None)
+    del sys.modules["sherd_cli.commands.temporary_command"]
+    result = CliRunner().invoke(create_app(), ["temporary"])
+    assert result.exit_code == 0
+    assert result.output == "discovered command ran\n"

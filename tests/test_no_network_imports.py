@@ -32,14 +32,17 @@ def network_imports(path: Path) -> list[str]:
     ]
 
 
-def test_no_network_imports() -> None:
-    providers = ROOT / "packages/agent/src/sherd_agent/providers"
-    violations = {
-        str(path.relative_to(ROOT)): network_imports(path)
-        for path in ROOT.glob("packages/*/src/**/*.py")
+def network_violations(root: Path) -> dict[str, list[str]]:
+    providers = root / "packages/agent/src/sherd_agent/providers"
+    return {
+        str(path.relative_to(root)): network_imports(path)
+        for path in root.glob("packages/*/src/**/*.py")
         if not path.is_relative_to(providers) and network_imports(path)
     }
-    assert not violations
+
+
+def test_no_network_imports() -> None:
+    assert not network_violations(ROOT)
 
 
 @pytest.mark.parametrize(
@@ -49,6 +52,9 @@ def test_no_network_imports() -> None:
         "import ssl",
         "import http.client",
         "from urllib import request",
+        "import urllib.request as r",
+        "from http import client",
+        "from requests.adapters import HTTPAdapter",
         "import httpx",
         "import requests",
         "import aiohttp",
@@ -67,3 +73,13 @@ def test_checker_allows_unrelated_import(tmp_path: Path) -> None:
     path = tmp_path / "safe.py"
     path.write_text("import pathlib\nfrom . import socket\n")
     assert not network_imports(path)
+
+
+@pytest.mark.parametrize(
+    ("directory", "allowed"), [("providers", True), ("providers_extra", False)]
+)
+def test_checker_provider_boundary(tmp_path: Path, directory: str, allowed: bool) -> None:
+    path = tmp_path / "packages/agent/src/sherd_agent" / directory / "adapter.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("import httpx\n")
+    assert bool(network_violations(tmp_path)) is not allowed

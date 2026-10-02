@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'">
+<title>sherd design system</title>
+<link rel="icon" href="../owl-mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="preview.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2 8 2.8l5.5 4.4v5.8a.5.5 0 0 1-.5.5H10V9.8H6v3.7H3a.5.5 0 0 1-.5-.5Z"/></symbol>
+    <symbol id="i-messages" viewBox="0 0 16 16"><path d="M3 3h10a1 1 0 0 1 1 1v6.2a1 1 0 0 1-1 1H7.2L4.4 13.6v-2.4H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/></symbol>
+    <symbol id="i-music" viewBox="0 0 16 16"><path d="M6 12V3.8l7-1.4v8.2"/><circle cx="4.4" cy="12" r="1.6"/><circle cx="11.4" cy="10.6" r="1.6"/></symbol>
+    <symbol id="i-money" viewBox="0 0 16 16"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="M2 6.5h12M10.5 9.6h1.5"/></symbol>
+    <symbol id="i-timeline" viewBox="0 0 16 16"><path d="M2 8h12M4 5v6M8 6.5v3M12 3.5v9"/></symbol>
+    <symbol id="i-ask" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.7 1.7 0 1 1 2.5 1.5c-.5.3-.8.6-.8 1.1v.3M8 11.3h.01"/></symbol>
+    <symbol id="i-wrapped" viewBox="0 0 16 16"><rect x="2.5" y="5.5" width="11" height="8" rx="1"/><path d="M2.5 8.5h11M8 5.5v8M8 5.5C7 3.4 4.7 3.2 4.8 4.6c.1 1 1.8 1 3.2.9M8 5.5c1-2.1 3.3-2.3 3.2-.9-.1 1-1.8 1-3.2.9"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 16 16"><path d="M2.5 4.5h6M12.5 4.5h1M2.5 11.5h1M7.5 11.5h6"/><circle cx="10.5" cy="4.5" r="1.8"/><circle cx="5.5" cy="11.5" r="1.8"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-6.5"/></symbol>
+    <symbol id="i-warning" viewBox="0 0 16 16"><path d="M8 2.4 14.2 13H1.8Z"/><path d="M8 6.4v3M8 11.2h.01"/></symbol>
+    <symbol id="i-danger" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="m6 6 4 4m0-4-4 4"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 7.4v3.8M8 5.1h.01"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8 13 3.8v4c0 3-2.2 5.3-5 6.4-2.8-1.1-5-3.4-5-6.4v-4Z"/><path d="m5.8 8 1.6 1.6 3-3"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></symbol>
+    <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4"/></symbol>
+    <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 3v10M4 9l4 4 4-4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3.2l1.5 1.6H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.3v9.4L12.4 8Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></symbol>
+    <symbol id="i-type" viewBox="0 0 16 16"><path d="M3 4.5V3h10v1.5M8 3v10M6 13h4"/></symbol>
+    <symbol id="i-ruler" viewBox="0 0 16 16"><rect x="1.5" y="5" width="13" height="6" rx="1"/><path d="M4.5 5v2.5M7.5 5v2M10.5 5v2.5"/></symbol>
+    <symbol id="i-components" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4" rx="1"/><rect x="2" y="9.5" width="5.5" height="4" rx="1"/><rect x="9.5" y="9.5" width="4.5" height="4" rx="1"/></symbol>
+    <symbol id="i-empty" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5" stroke-dasharray="2 1.8"/></symbol>
+    <symbol id="i-owl" viewBox="0 0 16 16"><path d="M3.5 9.5V4l1-1.6 1.6 1.4Q8 3.2 9.9 3.8l1.6-1.4 1 1.6v5.5"/><circle cx="6" cy="7" r="1.4"/><circle cx="10" cy="7" r="1.4"/><path d="M2.5 11.2Q8 9.4 13.5 11.2l-.6 1.8-2.6 1.3L8 13.6l-2.6.8-2.4-1.4Z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 16 16"><path d="M2.5 13.5h11M4.5 13.5V9M8 13.5V4.5M11.5 13.5V7"/></symbol>
+
+    <symbol id="owl-mark" viewBox="0 0 64 64">
+      <mask id="owl-mark-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+        <rect width="64" height="64" fill="#fff"/>
+        <circle cx="23.4" cy="26" r="7.6" fill="#000"/>
+        <circle cx="40.6" cy="26" r="7.6" fill="#000"/>
+        <path d="M28.6 32.6H35.4L32 39.2Z" fill="#000"/>
+        <path d="M5.6 44.6Q32 36.2 58.4 44.6L64 64H0Z" fill="#000"/>
+      </mask>
+      <g fill="currentColor">
+        <path mask="url(#owl-mark-cut)" d="M11.5 37 11.8 17.5 13.6 8.6 17.6 13 23 15.2Q32 12.2 41 15.2L46.4 13 50.4 8.6 52.2 17.5 52.5 37C52.5 50 43.5 58.5 32 58.5S11.5 50 11.5 37Z"/>
+        <circle cx="23.4" cy="26" r="3.6"/>
+        <circle cx="40.6" cy="26" r="3.6"/>
+        <path d="M8.2 46.6Q32 39 55.8 46.6L54.6 51.4 44.2 58.2 33.4 55.4 19.6 58.8 9.4 51.6Z"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <aside class="side">
+   <div class="side-inner">
+    <a class="brand" href="#top"><img src="../owl.svg" alt="" width="28" height="28">sherd</a>
+    <nav aria-label="Preview sections">
+      <div class="nav">
+        <a class="nav-item" href="#colour"><svg class="icon" aria-hidden="true"><use href="#i-palette"/></svg>Colour</a>
+        <a class="nav-item" href="#type"><svg class="icon" aria-hidden="true"><use href="#i-type"/></svg>Type</a>
+        <a class="nav-item" href="#space"><svg class="icon" aria-hidden="true"><use href="#i-ruler"/></svg>Space and motion</a>
+        <a class="nav-item" href="#components"><svg class="icon" aria-hidden="true"><use href="#i-components"/></svg>Components</a>
+        <a class="nav-item" href="#empty"><svg class="icon" aria-hidden="true"><use href="#i-empty"/></svg>Empty states</a>
+        <a class="nav-item" href="#privacy"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Privacy</a>
+        <a class="nav-item" href="#owl"><svg class="icon" aria-hidden="true"><use href="#i-owl"/></svg>Owl</a>
+        <a class="nav-item" href="#charts"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg>Charts</a>
+      </div>
+    </nav>
+    <div class="side-foot">
+      <span class="privacy-badge" title="Network use since install"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>0 bytes sent</span>
+    </div>
+   </div>
+  </aside>
+
+  <main class="main" id="top">
+    <header class="masthead">
+      <div>
+        <h1>sherd design system</h1>
+        <p>Warm charcoal, fired clay, bone-coloured type. Tokens live in <code>tokens.css</code>, chart styling in <code>sherd.vega.json</code>, words in <code>copy.yaml</code>. Everything on this page is drawn from those files, and every name and number on it is made up.</p>
+      </div>
+    </header>
+    <div class="scale" aria-hidden="true">
+      <div class="scale-bar"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span>0–10 cm</span>
+      <div class="scale-rule"></div>
+      <span>v1 · dark</span>
+    </div>
+
+    <section class="section" id="colour" aria-labelledby="colour-h">
+      <div class="section-head">
+        <h2 id="colour-h">Colour</h2>
+        <p>Restrained: charcoal surfaces and bone text carry the page; terracotta marks the one thing to do next. Semantic colours always come with an icon and a word. Green is kept for the privacy counter.</p>
+      </div>
+
+      <h3 class="sub">Surfaces and text</h3>
+      <div class="chips" data-chips="--color-bg,--color-surface-1,--color-surface-2,--color-surface-3,--color-line,--color-line-strong,--color-text,--color-text-2,--color-text-3,--color-text-disabled"></div>
+
+      <h3 class="sub">Accent, states and privacy</h3>
+      <div class="chips" data-chips="--color-accent,--color-accent-hover,--color-accent-press,--color-accent-text,--color-accent-soft,--color-focus,--color-success,--color-warning,--color-danger,--color-info,--color-privacy,--color-privacy-soft"></div>
+
+      <h3 class="sub">Chart palette</h3>
+      <p class="note sub-note">Eight categorical slots in a fixed order, checked for colour-vision separation: adjacent ΔE ≥ 11 under simulated protanopia and deuteranopia, ≥ 20 for normal vision. Scatter plots and small multiples use the first three only; a ninth series becomes “Other”.</p>
+      <div class="chips" data-chips="--chart-cat-1,--chart-cat-2,--chart-cat-3,--chart-cat-4,--chart-cat-5,--chart-cat-6,--chart-cat-7,--chart-cat-8" data-names="1 Terracotta,2 Verdigris,3 Iris,4 Ochre,5 Mulberry,6 Moss,7 Lapis,8 Rose"></div>
+      <h3 class="sub">Sequential and diverging</h3>
+      <p class="note sub-note">One hue from clay to sand, darker means less. Every step clears 3:1 on the chart background, so a heatmap cell never disappears.</p>
+      <div class="ramp" data-ramp="--chart-seq-1,--chart-seq-2,--chart-seq-3,--chart-seq-4,--chart-seq-5,--chart-seq-6,--chart-seq-7"></div>
+      <div class="ramp" style="margin-top: var(--space-3)" data-ramp="--chart-div-1,--chart-div-2,--chart-div-3,--chart-div-mid,--chart-div-5,--chart-div-6,--chart-div-7"></div>
+
+      <h3 class="sub">Contrast, computed</h3>
+      <p class="contrast-summary" id="contrast-summary" role="status"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span>Computing…</span></p>
+      <div class="table-scroll">
+        <table class="table contrast-table" id="contrast-surfaces">
+          <caption class="sr-only">Contrast of each foreground token on each surface</caption>
+          <thead><tr><th scope="col">Foreground</th><th scope="col">Used for</th><th scope="col" class="r">Needs</th><th scope="col" class="r">on bg</th><th scope="col" class="r">on surface-1</th><th scope="col" class="r">on surface-2</th><th scope="col" class="r">on surface-3</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h4 class="sub sub-sm">On fills and washes</h4>
+      <div class="table-scroll">
+        <table class="table contrast-table" id="contrast-fills">
+          <caption class="sr-only">Contrast of text and icons on coloured fills</caption>
+          <thead><tr><th scope="col">Foreground</th><th scope="col">On</th><th scope="col">Used for</th><th scope="col" class="r">Needs</th><th scope="col" class="r">Ratio</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="note" style="margin-top: var(--space-3)">WCAG 2.2 ratios, read from the custom properties in <code>tokens.css</code> when this page loads. Text needs 4.5:1; large text, control borders, focus rings and chart marks need 3:1. Disabled text is exempt and not listed.</p>
+    </section>
+
+    <section class="section" id="type" aria-labelledby="type-h">
+      <div class="section-head">
+        <h2 id="type-h">Type</h2>
+        <p>Fira Sans for everything you read, Fira Mono for SQL. A fixed scale with steps of about 1.2: product pages are read at one distance, so nothing is fluid.</p>
+      </div>
+      <div class="card" style="padding-block: var(--space-2)">
+        <div class="type-row"><div class="type-meta"><code>--text-4xl</code>56 / 600</div><div class="type-sample" style="font-size:var(--text-4xl);font-weight:600;line-height:var(--leading-tight);letter-spacing:-0.02em">0 bytes sent</div></div>
+        <div class="type-row"><div class="type-meta"><code>--text-3xl</code>40 / 600</div><div class="type-sample" style="font-size:var(--text-3xl);font-weight:600;line-height:var(--leading-tight);letter-spacing:var(--tracking-tight)">No sherds yet.</div></div>
+        <div class="type-row"><div class="type-meta"><code>--text-2xl</code>30 / 600</div><div class="type-sample" style="font-size:var(--text-2xl);font-weight:600;line-height:var(--leading-tight);letter-spacing:var(--tracking-tight)">48,210 messages</div></div>
+        <div class="type-row"><div class="type-meta"><code>--text-xl</code>24 / 600</div><div class="type-sample" style="font-size:var(--text-xl);font-weight:600;letter-spacing:var(--tracking-tight)">Messages</div></div>
+        <div class="type-row"><div class="type-meta"><code>--text-lg</code>20 / 600</div><div class="type-sample" style="font-size:var(--text-lg);font-weight:600">Who you talk to, year by year</div></div>
+        <div class="type-row"><div class="type-meta"><code>--text-md</code>17 / 400</div><div class="type-sample" style="font-size:var(--text-md);color:var(--color-text-2)">Point sherd at an export you already have, and this page fills with what it finds.</div></div>
+        <div class="type-row"><div class="type-meta"><code>--text-base</code>15 / 400</div><div class="type-sample">Digging the same export again adds nothing new, so re-run it whenever you like. <em>Italic for the occasional aside.</em> <strong style="font-weight:500">Medium for labels.</strong></div></div>
+        <div class="type-row"><div class="type-meta"><code>--text-sm</code>13 / 400</div><div class="type-sample" style="font-size:var(--text-sm);color:var(--color-text-2)">2,418 new rows from WhatsApp. 37 were already here. <span class="num">0123456789</span></div></div>
+        <div class="type-row"><div class="type-meta"><code>--text-xs</code>12 / 500</div><div class="type-sample" style="font-size:var(--text-xs);font-weight:500;color:var(--color-text-3)">Last dig 2 Oct 2026 · 14:05</div></div>
+        <div class="type-row"><div class="type-meta"><code>--font-mono</code>13 / 400</div><div class="type-sample" style="font-family:var(--font-mono);font-size:var(--text-sm);color:var(--color-text-2)">SELECT sender, count(*) FROM messages WHERE ts &gt;= '2025-01-01' GROUP BY 1;</div></div>
+      </div>
+    </section>
+
+    <section class="section" id="space" aria-labelledby="space-h">
+      <div class="section-head">
+        <h2 id="space-h">Space, shape and motion</h2>
+        <p>A 4 px grid. Small radii on controls, larger on panels. Shadows are short and warm. Motion is fast and only marks a change of state; with reduced motion on, things fade but do not move.</p>
+      </div>
+      <h3 class="sub">Spacing</h3>
+      <div class="specimen" data-space="--space-1,--space-2,--space-3,--space-4,--space-5,--space-6,--space-8,--space-10,--space-12,--space-16"></div>
+      <h3 class="sub">Radii and shadows</h3>
+      <div class="specimen">
+        <div class="specimen-item"><div class="radius-box" style="border-radius:var(--radius-xs)"></div><code>--radius-xs</code>3 px · tags</div>
+        <div class="specimen-item"><div class="radius-box" style="border-radius:var(--radius-sm)"></div><code>--radius-sm</code>6 px · controls</div>
+        <div class="specimen-item"><div class="radius-box" style="border-radius:var(--radius-md)"></div><code>--radius-md</code>10 px · cards</div>
+        <div class="specimen-item"><div class="radius-box" style="border-radius:var(--radius-lg)"></div><code>--radius-lg</code>16 px · panels</div>
+        <div class="specimen-item"><div class="shadow-box" style="box-shadow:var(--shadow-1)"></div><code>--shadow-1</code>resting</div>
+        <div class="specimen-item"><div class="shadow-box" style="box-shadow:var(--shadow-2)"></div><code>--shadow-2</code>raised</div>
+        <div class="specimen-item"><div class="shadow-box" style="box-shadow:var(--shadow-3);background:var(--color-surface-3)"></div><code>--shadow-3</code>popover</div>
+      </div>
+      <h3 class="sub">Motion</h3>
+      <div class="grid-2">
+        <div class="card">
+          <table class="table">
+            <tbody>
+              <tr><td><code>--dur-instant</code></td><td class="r">80 ms</td><td>hover colour</td></tr>
+              <tr><td><code>--dur-fast</code></td><td class="r">140 ms</td><td>press, toggles</td></tr>
+              <tr><td><code>--dur-base</code></td><td class="r">200 ms</td><td>menus, popovers</td></tr>
+              <tr><td><code>--dur-slow</code></td><td class="r">280 ms</td><td>panels, dialogs</td></tr>
+              <tr><td><code>--ease-out</code></td><td colspan="2">cubic-bezier(0.23, 1, 0.32, 1) · entering, responding</td></tr>
+              <tr><td><code>--ease-in-out</code></td><td colspan="2">cubic-bezier(0.77, 0, 0.175, 1) · moving on screen</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card" style="display:grid;gap:var(--space-4);align-content:start">
+          <div class="motion-demo" id="motion-demo">
+            <button class="btn btn-secondary btn-sm" type="button" aria-pressed="false" id="motion-toggle">Move</button>
+            <div class="motion-track"><div class="motion-dot"></div></div>
+          </div>
+          <p class="note">280 ms on <code>--ease-out</code>: a fast start and a soft landing. Press any button on this page to feel <code>--press-scale</code> (0.97).</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="components" aria-labelledby="components-h">
+      <div class="section-head">
+        <h2 id="components-h">Components</h2>
+        <p>Each control in each state. The hover, focus and pressed columns are forced with classes so they can be compared side by side; the default column is live.</p>
+      </div>
+
+      <h3 class="sub">Buttons</h3>
+      <div class="card">
+        <div class="state-grid">
+          <span></span><span class="col-head">Default</span><span class="col-head">Hover</span><span class="col-head">Focus</span><span class="col-head">Pressed</span><span class="col-head">Disabled</span>
+          <span class="row-head">Primary</span>
+          <button class="btn btn-primary" type="button">Start a dig</button>
+          <button class="btn btn-primary is-hover" type="button" tabindex="-1">Start a dig</button>
+          <button class="btn btn-primary is-focus" type="button" tabindex="-1">Start a dig</button>
+          <button class="btn btn-primary is-active" type="button" tabindex="-1">Start a dig</button>
+          <button class="btn btn-primary" type="button" disabled>Start a dig</button>
+          <span class="row-head">Secondary</span>
+          <button class="btn btn-secondary" type="button">Try demo mode</button>
+          <button class="btn btn-secondary is-hover" type="button" tabindex="-1">Try demo mode</button>
+          <button class="btn btn-secondary is-focus" type="button" tabindex="-1">Try demo mode</button>
+          <button class="btn btn-secondary is-active" type="button" tabindex="-1">Try demo mode</button>
+          <button class="btn btn-secondary" type="button" disabled>Try demo mode</button>
+          <span class="row-head">Ghost</span>
+          <button class="btn btn-ghost" type="button">Show SQL</button>
+          <button class="btn btn-ghost is-hover" type="button" tabindex="-1">Show SQL</button>
+          <button class="btn btn-ghost is-focus" type="button" tabindex="-1">Show SQL</button>
+          <button class="btn btn-ghost is-active" type="button" tabindex="-1">Show SQL</button>
+          <button class="btn btn-ghost" type="button" disabled>Show SQL</button>
+          <span class="row-head">Danger</span>
+          <button class="btn btn-danger" type="button">Remove import</button>
+          <button class="btn btn-danger is-hover" type="button" tabindex="-1">Remove import</button>
+          <button class="btn btn-danger is-focus" type="button" tabindex="-1">Remove import</button>
+          <button class="btn btn-danger is-active" type="button" tabindex="-1">Remove import</button>
+          <button class="btn btn-danger" type="button" disabled>Remove import</button>
+        </div>
+        <div class="row" style="margin-top: var(--space-6)">
+          <button class="btn btn-primary btn-lg" type="button"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>Start a dig</button>
+          <button class="btn btn-secondary" type="button"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Try demo mode</button>
+          <button class="btn btn-ghost btn-sm" type="button"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>Copy SQL</button>
+        </div>
+      </div>
+
+      <h3 class="sub">Inputs</h3>
+      <div class="card">
+        <div class="grid-3">
+          <label class="field"><span class="label">Export folder or zip</span><input class="input" placeholder="~/Downloads/WhatsApp Chat - Example Family.zip"><span class="hint">Default. Nothing is moved or changed.</span></label>
+          <label class="field"><span class="label">Export folder or zip</span><input class="input is-hover" value="~/Downloads/spotify-example" tabindex="-1"><span class="hint">Hover</span></label>
+          <label class="field"><span class="label">Export folder or zip</span><input class="input is-focus" value="~/Downloads/spotify-example" tabindex="-1"><span class="hint">Focus</span></label>
+          <label class="field"><span class="label">Export folder or zip</span><input class="input" value="~/Downloads/nothing-here" aria-invalid="true" aria-describedby="err-1"><span class="field-error" id="err-1"><svg class="icon" aria-hidden="true"><use href="#i-danger"/></svg>Nothing at ~/Downloads/nothing-here. Check the path and try again.</span></label>
+          <label class="field"><span class="label">Export folder or zip</span><input class="input" placeholder="Digging…" disabled><span class="hint">Disabled while a dig runs</span></label>
+          <label class="field"><span class="label">Connector</span><select class="select"><option>WhatsApp (iOS)</option><option>WhatsApp (Android)</option><option>Spotify</option><option>Revolut CSV</option></select><span class="hint">Shown when sherd can't decide</span></label>
+          <div class="field"><span class="label" id="search-l">Search messages</span><div class="input-search"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><input class="input" type="search" placeholder="Search by word or name" aria-labelledby="search-l"></div></div>
+        </div>
+      </div>
+
+      <h3 class="sub">Cards and headline stats</h3>
+      <div class="grid-3">
+        <div class="card">
+          <div class="stat-label">Messages in 2025</div>
+          <div class="stat-value">48,210</div>
+          <div class="delta delta-up"><svg class="icon" aria-hidden="true"><use href="#i-up"/></svg>12% more than 2024</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Listening in 2025</div>
+          <div class="stat-value">1,284<span class="stat-unit">hours</span></div>
+          <div class="delta delta-down"><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg>6% less than 2024</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Subscriptions found</div>
+          <div class="stat-value">€41.97<span class="stat-unit">a month</span></div>
+          <div class="delta">5 recurring charges · €503.64 a year</div>
+        </div>
+        <a class="card" href="#charts">
+          <div class="row" style="justify-content:space-between"><span class="card-title">Who you talk to, year by year</span><svg class="icon" style="color:var(--color-text-3)" aria-hidden="true"><use href="#i-chevron"/></svg></div>
+          <p class="card-sub">Top five contacts each year since 2021.</p>
+        </a>
+        <a class="card is-hover" href="#charts" tabindex="-1">
+          <div class="row" style="justify-content:space-between"><span class="card-title">When you're awake</span><svg class="icon" style="color:var(--color-text-3)" aria-hidden="true"><use href="#i-chevron"/></svg></div>
+          <p class="card-sub">Hover. Messages by hour and weekday.</p>
+        </a>
+        <div class="card" style="display:grid;gap:var(--space-3);align-content:start">
+          <div class="row" style="gap:var(--space-2)"><span class="tag">WhatsApp</span><span class="tag">Spotify</span><span class="tag">Revolut</span><span class="tag tag-demo">Demo data</span></div>
+          <p class="card-sub" style="margin:0">Tags name a source. The demo tag sits on every chart built from synthetic data.</p>
+        </div>
+      </div>
+
+      <h3 class="sub">Navigation and notices</h3>
+      <div class="grid-3">
+        <div class="card" style="padding: var(--space-3)">
+          <nav class="nav" aria-label="Example app navigation">
+            <a class="nav-item" href="#components" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>Home</a>
+            <a class="nav-item is-hover" href="#components" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-messages"/></svg>Messages<span class="nav-count">48.2K</span></a>
+            <a class="nav-item is-focus" href="#components" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-music"/></svg>Music<span class="nav-count">92.4K</span></a>
+            <a class="nav-item" href="#components"><svg class="icon" aria-hidden="true"><use href="#i-money"/></svg>Money<span class="nav-count">3.1K</span></a>
+            <a class="nav-item" href="#components"><svg class="icon" aria-hidden="true"><use href="#i-timeline"/></svg>Timeline</a>
+            <a class="nav-item" href="#components"><svg class="icon" aria-hidden="true"><use href="#i-ask"/></svg>Ask</a>
+            <a class="nav-item" aria-disabled="true" title="Needs a full year of data"><svg class="icon" aria-hidden="true"><use href="#i-wrapped"/></svg>Wrapped</a>
+            <a class="nav-item" href="#components"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>Settings</a>
+          </nav>
+        </div>
+        <div class="card notices">
+          <p class="note">Home is the current page: a clay wash and a clay icon. Messages shows hover, Music shows focus, and Wrapped stays disabled until a full year has been dug.</p>
+          <div class="notice notice-success"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><div><strong>2,418 new rows from WhatsApp.</strong> 37 were already here.</div></div>
+          <div class="notice notice-warning"><svg class="icon" aria-hidden="true"><use href="#i-warning"/></svg><div><strong>Not sure about this one.</strong> It might be a Spotify export (54% match). Import anyway, or choose another connector.</div></div>
+          <div class="notice notice-danger"><svg class="icon" aria-hidden="true"><use href="#i-danger"/></svg><div><strong>The import stopped and nothing was saved.</strong> The zip is damaged.</div></div>
+          <div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div><strong>Correlation, not cause.</strong> Weeks with more listening also had more spending.</div></div>
+        </div>
+      </div>
+
+      <h3 class="sub">SQL, always visible on Ask</h3>
+      <div class="sql">
+        <div class="sql-head"><span>DuckDB · read-only · <span class="num">5 rows</span> · <span class="num">18 ms</span></span><button class="btn btn-ghost btn-sm" type="button" id="copy-sql"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy SQL</span></button></div>
+<pre id="sql-text"><span class="c">-- Who did I message most in 2025?</span>
+<span class="k">SELECT</span> c.display_name, <span class="f">count</span>(*) <span class="k">AS</span> messages
+<span class="k">FROM</span> messages m
+<span class="k">JOIN</span> contacts c <span class="k">ON</span> c.id = m.contact_id
+<span class="k">WHERE</span> m.ts &gt;= <span class="s">'2025-01-01'</span> <span class="k">AND</span> m.ts &lt; <span class="s">'2026-01-01'</span>
+<span class="k">GROUP BY</span> <span class="n">1</span>
+<span class="k">ORDER BY</span> messages <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="n">5</span>;</pre>
+      </div>
+    </section>
+
+    <section class="section" id="empty" aria-labelledby="empty-h">
+      <div class="section-head">
+        <h2 id="empty-h">Empty states and first run</h2>
+        <p>An empty page says what it needs and offers the one action that fills it. The Home empty state doubles as the drop target for a first dig: drag a file over it. All text here comes from <code>copy.yaml</code>.</p>
+      </div>
+
+      <div class="empty" id="dropzone">
+        <svg class="owl" viewBox="0 0 64 64" width="160" height="160" role="img" aria-label="The sherd owl, holding a pottery sherd">
+          <defs><mask id="owl-body-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64"><rect width="64" height="64" fill="#fff"/><path d="M5.6 44.6Q32 36.2 58.4 44.6L64 64H0Z" fill="#000"/></mask></defs>
+          <g mask="url(#owl-body-cut)"><path fill="#c9b8a6" d="M11.5 37 11.8 17.5 13.6 8.6 17.6 13 23 15.2Q32 12.2 41 15.2L46.4 13 50.4 8.6 52.2 17.5 52.5 37C52.5 50 43.5 58.5 32 58.5S11.5 50 11.5 37Z"/><path fill="#a8937e" d="M11.5 31C14.2 37.6 20.6 41.6 32 41.6S49.8 37.6 52.5 31V44H11.5Z"/></g>
+          <path fill="#e9ddcf" d="M32 19.8C28.6 16.6 24.6 15.4 21 16.2 15.3 17.5 13.4 23.8 15.6 29.4 17.4 34 22.5 36.8 27.6 35.6 29.6 35.1 31 34.2 32 33 33 34.2 34.4 35.1 36.4 35.6 41.5 36.8 46.6 34 48.4 29.4 50.6 23.8 48.7 17.5 43 16.2 39.4 15.4 35.4 16.6 32 19.8Z"/>
+          <g class="owl-eyes"><circle cx="23.4" cy="26" r="7" fill="#1f1c19"/><circle cx="40.6" cy="26" r="7" fill="#1f1c19"/><circle cx="23.4" cy="26" r="4.2" fill="#f5c076"/><circle cx="40.6" cy="26" r="4.2" fill="#f5c076"/><circle cx="23.4" cy="26" r="2.2" fill="#1f1c19"/><circle cx="40.6" cy="26" r="2.2" fill="#1f1c19"/><circle cx="22.2" cy="24.6" r="0.9" fill="#f3ebe3"/><circle cx="39.4" cy="24.6" r="0.9" fill="#f3ebe3"/></g>
+          <path fill="#3a322d" d="M29.2 32.4H34.8L32 38Z"/>
+          <path fill="#cd6b44" d="M8.2 46.6Q32 39 55.8 46.6L54.6 51.4 44.2 58.2 33.4 55.4 19.6 58.8 9.4 51.6Z"/>
+          <path fill="#ea9453" d="M8.2 46.6Q32 39 55.8 46.6L55.3 48.6Q32 41.4 8.7 48.6Z"/>
+          <path fill="none" stroke="#9d4b28" stroke-width="1.2" stroke-linecap="round" d="M12.4 51.4Q32 45.2 51.6 51.4"/>
+          <g fill="#3a322d"><rect x="20.4" y="42.2" width="1.8" height="4" rx="0.9" transform="rotate(-8 21.3 44.2)"/><rect x="23.2" y="41.6" width="1.8" height="4.2" rx="0.9"/><rect x="26" y="41.2" width="1.8" height="4" rx="0.9" transform="rotate(8 26.9 43.2)"/><rect x="36.2" y="41.2" width="1.8" height="4" rx="0.9" transform="rotate(-8 37.1 43.2)"/><rect x="39" y="41.6" width="1.8" height="4.2" rx="0.9"/><rect x="41.8" y="42.2" width="1.8" height="4" rx="0.9" transform="rotate(8 42.7 44.2)"/></g>
+        </svg>
+        <div>
+          <h3 class="empty-title" data-copy="empty.home.title"></h3>
+          <p class="empty-body" data-copy="empty.home.body"></p>
+          <div class="empty-actions">
+            <button class="btn btn-primary btn-lg" type="button"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span data-copy="empty.home.action"></span></button>
+            <button class="btn btn-secondary btn-lg" type="button"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span data-copy="empty.home.secondary"></span></button>
+          </div>
+          <p class="empty-hint"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><span data-copy="empty.home.hint"></span></p>
+        </div>
+      </div>
+
+      <h3 class="sub">Every other page</h3>
+      <div class="grid-3" id="empty-grid"></div>
+
+      <h3 class="sub">First run</h3>
+      <p class="note sub-note" data-copy="onboarding.intro"></p>
+      <ol class="steps" id="steps"></ol>
+      <div class="notice notice-warning" style="margin-top: var(--space-5)"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div data-copy="onboarding.demo.banner"></div></div>
+    </section>
+
+    <section class="section" id="privacy" aria-labelledby="privacy-h">
+      <div class="section-head">
+        <h2 id="privacy-h">Privacy status</h2>
+        <p>The badge sits in the navigation on every page. The counter is the first thing on Settings. Both read the same number, and the green belongs to them alone.</p>
+      </div>
+      <div class="settings-privacy">
+        <div class="card" style="padding: var(--space-8)">
+          <div class="privacy-counter">
+            <div class="privacy-counter-value"><span class="num privacy-counter-num">0</span><span>bytes sent</span></div>
+            <div class="privacy-counter-since">since 14 Sep 2026, when sherd was installed</div>
+          </div>
+          <div class="row" style="margin-top: var(--space-6)">
+            <span class="privacy-badge"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>0 bytes sent</span>
+            <span class="note">The same number, as a badge in the navigation</span>
+          </div>
+        </div>
+        <ul class="privacy-lines" id="privacy-lines"></ul>
+      </div>
+    </section>
+
+    <section class="section" id="owl" aria-labelledby="owl-h">
+      <div class="section-head">
+        <h2 id="owl-h">The owl</h2>
+        <p>A small owl perched on a rim sherd. The colour owl is for empty states and onboarding; the one-colour mark is for the favicon, the navigation and the watermark on Wrapped cards. Both sit on the same 64-unit grid. Hover the owl in the Home empty state.</p>
+      </div>
+      <div class="card" style="display:grid;gap:var(--space-8)">
+        <div class="owl-sizes" id="owl-sizes"></div>
+        <div class="owl-sizes">
+          <figure><svg class="mark-dark" width="16" height="16" aria-hidden="true"><use href="#owl-mark"/></svg><figcaption>16</figcaption></figure>
+          <figure><svg class="mark-dark" width="32" height="32" aria-hidden="true"><use href="#owl-mark"/></svg><figcaption>32</figcaption></figure>
+          <figure><svg class="mark-dark" width="64" height="64" aria-hidden="true"><use href="#owl-mark"/></svg><figcaption>64</figcaption></figure>
+          <figure><svg style="color:var(--color-accent)" width="64" height="64" aria-hidden="true"><use href="#owl-mark"/></svg><figcaption>64, clay</figcaption></figure>
+          <figure>
+            <div class="owl-light">
+              <svg style="color:#1f1c19" width="16" height="16" aria-hidden="true"><use href="#owl-mark"/></svg>
+              <svg style="color:#1f1c19" width="32" height="32" aria-hidden="true"><use href="#owl-mark"/></svg>
+              <svg style="color:#1f1c19" width="64" height="64" aria-hidden="true"><use href="#owl-mark"/></svg>
+              <img src="../owl.svg" width="64" height="64" alt="">
+            </div>
+            <figcaption>on bone</figcaption>
+          </figure>
+          <figure><span class="favicon-demo"><img src="../owl-mark.svg" width="16" height="16" alt="">sherd · Home</span><figcaption>favicon: owl-mark.svg</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="charts" aria-labelledby="charts-h">
+      <div class="section-head">
+        <h2 id="charts-h">Charts</h2>
+        <p>Vega-Lite, with <code>sherd.vega.json</code> passed as <code>config</code> unmodified. The specs below set data, encodings and size only, never a colour or font, and the same file styles the PNG export. Every chart has a text summary and a table.</p>
+      </div>
+      <div class="grid-2">
+        <figure class="card chart-card"><div class="chart" id="chart-bar"></div><figcaption class="chart-summary" id="sum-bar"></figcaption><details class="chart-table"><summary><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>Show as table</summary><div class="chart-table-scroll" id="tbl-bar"></div></details></figure>
+        <figure class="card chart-card"><div class="chart" id="chart-line"></div><figcaption class="chart-summary" id="sum-line"></figcaption><details class="chart-table"><summary><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>Show as table</summary><div class="chart-table-scroll" id="tbl-line"></div></details></figure>
+        <figure class="card chart-card"><div class="chart" id="chart-heat"></div><figcaption class="chart-summary" id="sum-heat"></figcaption><details class="chart-table"><summary><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>Show as table</summary><div class="chart-table-scroll" id="tbl-heat"></div></details></figure>
+        <figure class="card chart-card"><div class="chart" id="chart-bump"></div><figcaption class="chart-summary" id="sum-bump"></figcaption><details class="chart-table"><summary><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>Show as table</summary><div class="chart-table-scroll" id="tbl-bump"></div></details></figure>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Verbatim copy of packages/insights/src/sherd_insights/theme/sherd.vega.json.
+     Inlined because a page opened from disk cannot fetch() a sibling file. -->
+<script type="application/json" id="sherd-vega-theme">
+{
+  "background": "#1f1c19",
+  "padding": 4,
+  "font": "Fira Sans",
+  "view": {
+    "stroke": null,
+    "continuousWidth": 480,
+    "continuousHeight": 240
+  },
+  "title": {
+    "anchor": "start",
+    "color": "#f3ebe3",
+    "font": "Fira Sans",
+    "fontSize": 15,
+    "fontWeight": 600,
+    "offset": 14,
+    "subtitleColor": "#aea49c",
+    "subtitleFont": "Fira Sans",
+    "subtitleFontSize": 12.5,
+    "subtitleFontWeight": 400,
+    "subtitlePadding": 4
+  },
+  "axis": {
+    "domainColor": "#514c48",
+    "domainWidth": 1,
+    "gridColor": "#2e2a27",
+    "gridWidth": 1,
+    "labelColor": "#aea49c",
+    "labelFont": "Fira Sans",
+    "labelFontSize": 11.5,
+    "labelPadding": 6,
+    "tickColor": "#514c48",
+    "tickSize": 4,
+    "tickWidth": 1,
+    "titleColor": "#ccc2ba",
+    "titleFont": "Fira Sans",
+    "titleFontSize": 12,
+    "titleFontWeight": 500,
+    "titlePadding": 10
+  },
+  "axisX": {
+    "grid": false,
+    "labelAngle": 0,
+    "labelFlush": true,
+    "labelOverlap": "greedy"
+  },
+  "axisY": {
+    "domain": false,
+    "ticks": false
+  },
+  "axisQuantitative": {
+    "tickCount": 5
+  },
+  "axisBand": {
+    "grid": false,
+    "domain": false,
+    "ticks": false
+  },
+  "legend": {
+    "labelColor": "#ccc2ba",
+    "labelFont": "Fira Sans",
+    "labelFontSize": 12,
+    "labelLimit": 180,
+    "symbolSize": 72,
+    "symbolStrokeWidth": 0,
+    "symbolType": "circle",
+    "titleColor": "#ccc2ba",
+    "titleFont": "Fira Sans",
+    "titleFontSize": 12,
+    "titleFontWeight": 500,
+    "titlePadding": 8,
+    "rowPadding": 6,
+    "columnPadding": 16,
+    "gradientLength": 200,
+    "gradientThickness": 10,
+    "gradientStrokeWidth": 0
+  },
+  "header": {
+    "labelColor": "#ccc2ba",
+    "labelFont": "Fira Sans",
+    "labelFontSize": 12,
+    "titleColor": "#f3ebe3",
+    "titleFont": "Fira Sans",
+    "titleFontSize": 13,
+    "titleFontWeight": 600
+  },
+  "range": {
+    "category": ["#cf6139", "#0c9485", "#7563c0", "#b98918", "#aa487b", "#759b3d", "#407bc5", "#cc7580"],
+    "ordinal": ["#b94d23", "#cb632e", "#dc7b3e", "#ea9453", "#f6ae6e", "#fec890", "#ffe3c2"],
+    "ramp": ["#b94d23", "#cb632e", "#dc7b3e", "#ea9453", "#f6ae6e", "#fec890", "#ffe3c2"],
+    "heatmap": ["#b94d23", "#cb632e", "#dc7b3e", "#ea9453", "#f6ae6e", "#fec890", "#ffe3c2"],
+    "diverging": ["#d47452", "#ae6d56", "#896a5c", "#6d6864", "#607489", "#5c83af", "#6295d4"]
+  },
+  "scale": {
+    "bandPaddingInner": 0.32,
+    "bandPaddingOuter": 0.16,
+    "barBandPaddingInner": 0.32,
+    "rectBandPaddingInner": 0
+  },
+  "mark": {
+    "color": "#cf6139",
+    "tooltip": true
+  },
+  "bar": {
+    "color": "#cf6139",
+    "cornerRadiusEnd": 4
+  },
+  "arc": {
+    "stroke": "#1f1c19",
+    "strokeWidth": 2
+  },
+  "area": {
+    "color": "#cf6139",
+    "fillOpacity": 0.12,
+    "line": {
+      "strokeWidth": 2
+    }
+  },
+  "line": {
+    "color": "#cf6139",
+    "strokeWidth": 2,
+    "strokeCap": "round",
+    "strokeJoin": "round"
+  },
+  "point": {
+    "color": "#cf6139",
+    "filled": true,
+    "opacity": 1,
+    "size": 72,
+    "stroke": "#1f1c19",
+    "strokeWidth": 2
+  },
+  "circle": {
+    "color": "#cf6139",
+    "opacity": 1,
+    "size": 72,
+    "stroke": "#1f1c19",
+    "strokeWidth": 2
+  },
+  "rect": {
+    "stroke": "#1f1c19",
+    "strokeWidth": 2,
+    "cornerRadius": 2
+  },
+  "rule": {
+    "color": "#817a75",
+    "strokeWidth": 1
+  },
+  "tick": {
+    "color": "#cf6139",
+    "thickness": 2
+  },
+  "text": {
+    "color": "#ccc2ba",
+    "font": "Fira Sans",
+    "fontSize": 11.5
+  },
+  "style": {
+    "guide-label": {
+      "font": "Fira Sans",
+      "fill": "#aea49c"
+    },
+    "guide-title": {
+      "font": "Fira Sans",
+      "fill": "#ccc2ba"
+    },
+    "group-title": {
+      "font": "Fira Sans",
+      "fill": "#f3ebe3"
+    },
+    "group-subtitle": {
+      "font": "Fira Sans",
+      "fill": "#aea49c"
+    },
+    "label": {
+      "font": "Fira Sans",
+      "fill": "#ccc2ba",
+      "fontSize": 11.5
+    },
+    "value": {
+      "font": "Fira Sans",
+      "fill": "#f3ebe3",
+      "fontSize": 11.5,
+      "fontWeight": 500
+    }
+  },
+  "concat": {
+    "spacing": 24
+  },
+  "facet": {
+    "spacing": 16
+  }
+}
+</script>
+
+<!-- packages/web/src/sherd_web/copy.yaml as JSON, for the same reason. -->
+<script type="application/json" id="sherd-copy">
+{
+ "product": {
+  "name": "sherd",
+  "tagline": "Your exports, reassembled. On your machine.",
+  "owl_alt": "The sherd owl, holding a pottery sherd"
+ },
+ "empty": {
+  "home": {
+   "title": "No sherds yet.",
+   "body": "Point sherd at an export you already have, a WhatsApp chat or a Spotify download, and this page fills with what it finds.",
+   "action": "Start a dig",
+   "secondary": "Try demo mode",
+   "hint": "Nothing is uploaded. Everything stays in {db_path}."
+  },
+  "messages": {
+   "title": "No messages dug up yet.",
+   "body": "Export a WhatsApp chat (in the app, open a chat, then More, then Export chat) and dig the file. Charts of who you talk to, and when, appear here.",
+   "action": "Dig a chat export",
+   "secondary": "How to export a chat"
+  },
+  "music": {
+   "title": "Silence, so far.",
+   "body": "Request your extended streaming history from Spotify's privacy page. It arrives as a zip in a few days; dig it as it is.",
+   "action": "Dig a Spotify export",
+   "secondary": "How to request it"
+  },
+  "money": {
+   "title": "No transactions yet.",
+   "body": "Download a statement as CSV from your bank and dig it. Revolut works out of the box; other banks need a short column mapping.",
+   "action": "Dig a bank CSV",
+   "secondary": "Map a different bank"
+  },
+  "timeline": {
+   "title": "The timeline needs a first layer.",
+   "body": "Every dig adds a band to the timeline. One export is enough to start; two or more is where it gets interesting.",
+   "action": "Start a dig"
+  },
+  "ask": {
+   "title": "Ask needs something to look at.",
+   "body": "Questions are answered with SQL over your own tables, and there are no tables yet. Dig an export first, or try the demo database.",
+   "action": "Start a dig",
+   "secondary": "Try demo mode"
+  },
+  "ask_no_model": {
+   "title": "Choose a model to ask with.",
+   "body": "Ask turns your question into SQL with a language model. Run one locally with Ollama, or add a key for a remote provider in Settings. The dashboards work without either.",
+   "action": "Set up a model",
+   "secondary": "Use Ollama"
+  },
+  "ask_no_history": {
+   "title": "Ask a question about your data.",
+   "body": "The SQL is always shown above the answer, so you can check it, copy it, or run it yourself.",
+   "examples": [
+    "Who did I message most in 2024?",
+    "What did I listen to on Sunday mornings?",
+    "How much did I spend on food delivery last year?"
+   ]
+  },
+  "wrapped": {
+   "title": "Not enough to wrap yet.",
+   "body": "Wrapped needs at least one full year from one source. Dig an export that covers {year}, then come back for the cards.",
+   "action": "Start a dig",
+   "hint": "Cards are made on this machine and contain no message text."
+  },
+  "settings": {
+   "title": "No connectors in use.",
+   "body": "Connectors appear here after their first dig, with what they read, when, and how many rows they added.",
+   "action": "Start a dig"
+  },
+  "no_results": {
+   "title": "Nothing in this range.",
+   "body": "No rows between {date_from} and {date_to}. Widen the range or clear the filter.",
+   "action": "Clear filters"
+  },
+  "dig_unavailable": {
+   "title": "This chart needs {table}.",
+   "body": "It reads from {table}, which has no rows yet. Dig an export that contains {source_kind} to fill it.",
+   "action": "Start a dig"
+  }
+ },
+ "onboarding": {
+  "title": "Welcome to sherd.",
+  "intro": "sherd turns the data exports you already own into one private database, then shows you your life in charts. It reads files; it does not log in anywhere.",
+  "steps": [
+   {
+    "id": "choose",
+    "title": "Start a dig, or look around first",
+    "body": "A dig reads an export folder or zip and imports what it recognises. Demo mode loads a synthetic life (made-up people, made-up songs) so you can see every page before you share anything with sherd.",
+    "action": "Start a dig",
+    "secondary": "Try demo mode"
+   },
+   {
+    "id": "point",
+    "title": "Point at an export",
+    "body": "Drop a folder or zip here, or paste its path. Nothing is moved or changed; sherd only reads.",
+    "field_label": "Export folder or zip",
+    "field_placeholder": "~/Downloads/WhatsApp Chat - Example Family.zip",
+    "action": "Dig"
+   },
+   {
+    "id": "confirm",
+    "title": "Check what was found",
+    "body": "sherd says what each file looks like before importing. Confirm, or pick the right connector if it guessed wrong.",
+    "action": "Import"
+   },
+   {
+    "id": "done",
+    "title": "First layer in.",
+    "body": "{rows} rows from {connector}, {date_from} to {date_to}. Digging the same export again adds nothing new, so re-run it whenever you like.",
+    "action": "Open Home",
+    "secondary": "Dig another export"
+   }
+  ],
+  "demo": {
+   "banner": "Demo mode. Every person, message, song and payment here is made up.",
+   "exit": "Leave demo mode",
+   "entered": "Demo database loaded. Have a look around."
+  }
+ },
+ "detect": {
+  "scanning": "Reading {path}…",
+  "scanning_progress": "{files} files checked",
+  "found_one": "Looks like a {connector} export ({confidence} match).",
+  "found_many": "Found {count} exports in {path}.",
+  "tie": "{path} could be {a} or {b}. Which is it?",
+  "tie_action": "Use this connector",
+  "low_confidence": "This might be a {connector} export, but sherd is not sure ({confidence} match). Import anyway, or choose another connector.",
+  "low_confidence_action": "Import as {connector}",
+  "unknown": "sherd doesn't recognise {path}. It knows {known}. If this is one of those, the export format may have changed; please report it.",
+  "unknown_action": "Choose a connector",
+  "empty_folder": "{path} has no files sherd can read.",
+  "not_found": "Nothing at {path}. Check the path and try again.",
+  "unreadable": "sherd can't read {path} (permission denied).",
+  "importing": "Importing {connector}…",
+  "imported": "{inserted} new rows from {connector}. {skipped} were already here.",
+  "imported_nothing_new": "Nothing new. Every row in this export is already in your database.",
+  "partial": "{inserted} rows imported; {failed} lines couldn't be parsed. Details are in the import log ({import_id}).",
+  "failed": "The import stopped and nothing was saved. {reason}",
+  "timezone_prompt": "This export has no time zone. Which one were you in?",
+  "timezone_default": "Use {tz} (this machine)"
+ },
+ "privacy": {
+  "counter_label": "sent",
+  "counter_zero": "0 bytes sent",
+  "counter_since": "since {date}",
+  "badge_title": "Network use since install",
+  "local_only": "Everything stays on this machine.",
+  "offline": "Offline mode. Only loopback connections are allowed; nothing leaves this machine.",
+  "local_model": "Ask uses {provider} on this machine. Questions never leave it.",
+  "remote_model": "Ask uses {provider}, a remote service. Each question you ask sends data to it; the details are listed below.",
+  "remote_model_counter": "{bytes} sent to {provider}",
+  "no_model": "No model set up. The dashboards don't need one.",
+  "no_telemetry": "No telemetry, no accounts, no update checks.",
+  "db_location": "Your database is {db_path} ({size}).",
+  "delete_hint": "To erase everything, delete that file. There is no copy anywhere else."
+ },
+ "common": {
+  "view_sql": "Show SQL",
+  "hide_sql": "Hide SQL",
+  "copy_sql": "Copy SQL",
+  "copied": "Copied",
+  "view_table": "Show as table",
+  "view_chart": "Show as chart",
+  "rows": "{count} rows",
+  "rows_one": "1 row",
+  "loading": "Digging…",
+  "retry": "Try again",
+  "cancel": "Cancel",
+  "close": "Close",
+  "chart_summary_label": "Chart summary",
+  "correlation_note": "Correlation, not cause.",
+  "demo_label": "Demo data"
+ },
+ "errors": {
+  "generic": "Something went wrong on our side. {detail}",
+  "query_timeout": "That query took longer than {seconds} s and was stopped. Try a narrower date range.",
+  "query_rows": "Showing the first {limit} rows. Add a filter or a LIMIT to see the rest.",
+  "query_refused": "That question would change data, and Ask is read-only. Rephrase it as a question.",
+  "model_unreachable": "Couldn't reach {provider}. Check that it is running, or switch provider in Settings.",
+  "export_failed": "Couldn't write {path}. Check that the folder exists and is writable."
+ }
+}
+</script>
+
+<script src="../vendor/vega.min.js"></script>
+<script src="../vendor/vega-lite.min.js"></script>
+<script src="../vendor/vega-embed.min.js"></script>
+<script>
+(() => {
+  "use strict";
+  const root = getComputedStyle(document.documentElement);
+  const tok = (name) => root.getPropertyValue(name).trim();
+  const copy = JSON.parse(document.getElementById("sherd-copy").textContent);
+  const theme = JSON.parse(document.getElementById("sherd-vega-theme").textContent);
+  const get = (path) => path.split(".").reduce((o, k) => (o == null ? o : o[k]), copy);
+  const fill = (s, vars) => s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+  const sample = { db_path: "~/.sherd/life.duckdb", year: "2025", rows: "2,418", connector: "WhatsApp", date_from: "3 Mar 2019", date_to: "28 Sep 2026", provider: "Ollama", size: "41 MB", date: "14 Sep 2026" };
+
+  /* DOM helpers: elements are built, never parsed from strings. */
+  const SVG = "http://www.w3.org/2000/svg";
+  const h = (tag, attrs = {}, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === "style") el.style.cssText = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    el.append(...kids.flat().filter((k) => k != null && k !== false));
+    return el;
+  };
+  const icon = (id, cls = "icon") => {
+    const s = document.createElementNS(SVG, "svg");
+    s.setAttribute("class", cls);
+    s.setAttribute("aria-hidden", "true");
+    const u = document.createElementNS(SVG, "use");
+    u.setAttribute("href", "#" + id);
+    s.append(u);
+    return s;
+  };
+  const mount = (sel, ...kids) => document.querySelector(sel).replaceChildren(...kids.flat());
+
+  /* ---- copy ---------------------------------------------------------------- */
+  document.querySelectorAll("[data-copy]").forEach((el) => {
+    const v = get(el.dataset.copy);
+    if (typeof v === "string") el.textContent = fill(v, sample);
+  });
+
+  const pageIcons = { messages: "i-messages", music: "i-music", money: "i-money", timeline: "i-timeline", ask: "i-ask", wrapped: "i-wrapped", settings: "i-settings" };
+  mount("#empty-grid", Object.entries(pageIcons).map(([page, ic]) => {
+    const e = copy.empty[page];
+    return h("div", { class: "empty empty-sm" },
+      h("div", { class: "empty-page" }, icon(ic), h("span", {}, page[0].toUpperCase() + page.slice(1))),
+      h("h4", { class: "empty-title" }, fill(e.title, sample)),
+      h("p", { class: "empty-body" }, fill(e.body, sample)),
+      h("div", { class: "empty-actions" },
+        e.action && h("button", { class: "btn btn-primary btn-sm", type: "button" }, e.action),
+        e.secondary && h("button", { class: "btn btn-ghost btn-sm", type: "button" }, e.secondary)));
+  }));
+
+  mount("#steps", copy.onboarding.steps.map((s, i) =>
+    h("li", { class: "step", "aria-current": i === 0 ? "step" : null },
+      h("div", { class: "step-title" }, fill(s.title, sample)),
+      h("p", { class: "step-body" }, fill(s.body, sample)))));
+
+  const p = copy.privacy;
+  mount("#privacy-lines", [
+    ["i-lock", p.local_only], ["i-shield", p.offline], ["i-check", p.local_model], ["i-check", p.no_telemetry], ["i-info", p.db_location], ["i-info", p.delete_hint],
+  ].map(([ic, t]) => h("li", {}, icon(ic), h("span", {}, fill(t, sample)))));
+
+  /* ---- colour chips and contrast -------------------------------------------- */
+  const hexToRgb = (x) => { x = x.replace("#", ""); return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16) / 255); };
+  const lum = (x) => { const [r, g, b] = hexToRgb(x).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  const S = ["--color-bg", "--color-surface-1", "--color-surface-2", "--color-surface-3"];
+  const CHART_S = ["--color-bg", "--color-surface-1"];
+  const short = (n) => n.replace("--color-", "").replace("--chart-", "chart-");
+
+  document.querySelectorAll("[data-chips]").forEach((box) => {
+    const names = box.dataset.names ? box.dataset.names.split(",") : [];
+    box.replaceChildren(...box.dataset.chips.split(",").map((t, i) => {
+      const hex = tok(t);
+      return h("div", { class: "chip" },
+        h("div", { class: "chip-swatch", style: `background:${hex}` }),
+        h("div", { class: "chip-meta" },
+          h("span", { class: "chip-name" }, names[i] || short(t)),
+          h("code", {}, t),
+          h("span", { class: "num" }, `${hex} · ${ratio(hex, tok("--color-bg")).toFixed(2)}:1 on bg`)));
+    }));
+  });
+  document.querySelectorAll("[data-ramp]").forEach((box) => {
+    box.replaceChildren(...box.dataset.ramp.split(",").map((t) => {
+      const hex = tok(t);
+      const ink = ratio(hex, "#130e0c") > ratio(hex, "#f3ebe3") ? "#130e0c" : "#f3ebe3";
+      return h("div", { style: `background:${hex};color:${ink}` }, hex);
+    }));
+  });
+  const sp = document.querySelector("[data-space]");
+  sp.replaceChildren(...sp.dataset.space.split(",").map((t) =>
+    h("div", { class: "specimen-item" }, h("div", { class: "space-bar", style: `width:var(${t})` }), h("code", {}, t), `${parseFloat(tok(t)) * 16} px`)));
+
+  /* Rows on the four surfaces; chart colours only ever sit on bg and surface-1. */
+  const onSurfaces = [
+    ["--color-text", "Primary text", 4.5, S],
+    ["--color-text-2", "Secondary text", 4.5, S],
+    ["--color-text-3", "Muted text, placeholders, axis labels", 4.5, S],
+    ["--color-accent-text", "Links, SQL keywords", 4.5, S],
+    ["--color-success", "Success text and icons", 4.5, S],
+    ["--color-warning", "Warning text and icons", 4.5, S],
+    ["--color-danger", "Error text, danger button", 4.5, S],
+    ["--color-info", "Info text, SQL functions", 4.5, S],
+    ["--color-privacy", "Privacy counter and badge", 4.5, S],
+    ["--color-accent", "Primary button fill", 3, S],
+    ["--color-focus", "Focus ring", 3, S],
+    ["--color-line-strong", "Control borders", 3, S.slice(0, 3)],
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((i) => [`--chart-cat-${i}`, `Chart, categorical ${i}`, 3, CHART_S]),
+    ...[1, 2, 3, 4, 5, 6, 7].map((i) => [`--chart-seq-${i}`, `Chart, sequential ${i}`, 3, CHART_S]),
+    ...["1", "2", "3", "mid", "5", "6", "7"].map((x) => [`--chart-div-${x}`, `Chart, diverging ${x}`, 3, CHART_S]),
+  ];
+  const onFills = [
+    ["--color-on-accent", "--color-accent", "Primary button label", 4.5],
+    ["--color-on-accent", "--color-accent-hover", "Primary button, hovered", 4.5],
+    ["--color-on-accent", "--color-accent-press", "Primary button, pressed", 4.5],
+    ["--color-text", "--color-accent-soft", "Current nav item, selected rows", 4.5],
+    ["--color-accent-text", "--color-accent-soft", "Current nav icon", 3],
+    ["--color-text", "--color-success-soft", "Success notice", 4.5],
+    ["--color-text", "--color-warning-soft", "Warning notice, demo banner", 4.5],
+    ["--color-text", "--color-danger-soft", "Error notice", 4.5],
+    ["--color-text", "--color-info-soft", "Info notice", 4.5],
+    ["--color-warning", "--color-warning-soft", "Demo tag", 4.5],
+    ["--color-danger", "--color-danger-soft", "Danger button, hovered", 4.5],
+    ["--color-privacy", "--color-privacy-soft", "Privacy badge", 4.5],
+    ["--color-success", "--color-success-soft", "Success icon", 3],
+    ["--color-warning", "--color-warning-soft", "Warning icon", 3],
+    ["--color-danger", "--color-danger-soft", "Error icon", 3],
+    ["--color-info", "--color-info-soft", "Info icon", 3],
+  ];
+
+  let checked = 0, fails = 0;
+  const sw = (hex) => h("span", { class: "sw", style: `background:${hex}` });
+  const cell = (fg, bg, need) => {
+    const c = ratio(tok(fg), tok(bg)), ok = c >= need;
+    checked++;
+    if (!ok) fails++;
+    return h("td", { class: `r num ${ok ? "pass" : "fail"}`, title: ok ? "meets the threshold" : "below the threshold" },
+      c.toFixed(2), icon(ok ? "i-check" : "i-danger", "icon cr-icon"), h("span", { class: "sr-only" }, ok ? " pass" : " fail"));
+  };
+  mount("#contrast-surfaces tbody", onSurfaces.map(([fg, role, need, ons]) =>
+    h("tr", {},
+      h("td", {}, sw(tok(fg)), h("code", {}, fg)),
+      h("td", {}, role),
+      h("td", { class: "r num" }, `${need}:1`),
+      S.map((s) => (ons.includes(s) ? cell(fg, s, need) : h("td", { class: "r na" }, h("span", { "aria-hidden": "true" }, "–"), h("span", { class: "sr-only" }, "not used")))))));
+  mount("#contrast-fills tbody", onFills.map(([fg, on, role, need]) =>
+    h("tr", {},
+      h("td", {}, sw(tok(fg)), h("code", {}, fg)),
+      h("td", {}, sw(tok(on)), h("code", {}, on)),
+      h("td", {}, role),
+      h("td", { class: "r num" }, `${need}:1`),
+      cell(fg, on, need))));
+
+  const sum = document.getElementById("contrast-summary");
+  sum.querySelector("span").textContent = fails ? `${fails} of ${checked} pairs are below their threshold.` : `${checked} pairs checked. All meet their threshold.`;
+  if (fails) { sum.classList.add("has-fail"); sum.querySelector("use").setAttribute("href", "#i-danger"); }
+  document.documentElement.dataset.contrastPairs = checked;
+  document.documentElement.dataset.contrastFails = fails;
+
+  /* ---- small interactions ---------------------------------------------------- */
+  const md = document.getElementById("motion-demo");
+  document.getElementById("motion-toggle").addEventListener("click", (e) => {
+    md.style.setProperty("--track", md.querySelector(".motion-track").clientWidth + "px");
+    const on = md.classList.toggle("is-on");
+    e.currentTarget.setAttribute("aria-pressed", String(on));
+  });
+  const copyBtn = document.getElementById("copy-sql");
+  copyBtn.addEventListener("click", () => {
+    const label = copyBtn.querySelector("span");
+    navigator.clipboard?.writeText(document.getElementById("sql-text").textContent).catch(() => {});
+    label.textContent = copy.common.copied;
+    setTimeout(() => { label.textContent = copy.common.copy_sql; }, 1400);
+  });
+  const dz = document.getElementById("dropzone");
+  ["dragenter", "dragover"].forEach((t) => dz.addEventListener(t, (e) => { e.preventDefault(); dz.classList.add("is-dragover"); }));
+  ["dragleave", "drop"].forEach((t) => dz.addEventListener(t, (e) => { e.preventDefault(); dz.classList.remove("is-dragover"); }));
+
+  mount("#owl-sizes", [16, 24, 32, 48, 64, 128, 256].map((s) =>
+    h("figure", {}, h("img", { src: "../owl.svg", width: s, height: s, alt: "" }), h("figcaption", {}, String(s)))));
+
+  /* ---- charts: synthetic data, theme passed through untouched ---------------- */
+  const fmt = (n) => n.toLocaleString("en-GB");
+  const table = (cols, data) => h("table", { class: "table" },
+    h("thead", {}, h("tr", {}, cols.map(([, label, right]) => h("th", { scope: "col", class: right ? "r" : null }, label)))),
+    h("tbody", {}, data.map((d) => h("tr", {}, cols.map(([key, , right]) => h("td", { class: right ? "r" : null }, String(d[key])))))));
+
+  const spend = [
+    { merchant: "Example Grocer", eur: 1840 },
+    { merchant: "Placeholder Pizza", eur: 1215 },
+    { merchant: "Test Transit", eur: 960 },
+    { merchant: "Corner Bakery Co.", eur: 486 },
+    { merchant: "Mock Streaming", eur: 312 },
+    { merchant: "Sample Pharmacy", eur: 274 },
+  ];
+  const barSpec = {
+    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+    title: { text: "Where the money went", subtitle: "Top merchants by spend, 2025, in euros" },
+    width: "container", height: 240,
+    padding: { left: 4, top: 4, bottom: 4, right: 40 }, /* room for the value at the bar tip */
+    data: { values: spend },
+    encoding: {
+      y: { field: "merchant", type: "nominal", sort: null, title: null },
+      x: { field: "eur", type: "quantitative", title: null, axis: { format: ",d", labelExpr: "'€' + datum.label" } },
+      tooltip: [{ field: "merchant", title: "Merchant" }, { field: "eur", title: "Spent (€)", format: ",d" }],
+    },
+    layer: [
+      { mark: "bar" },
+      { mark: { type: "text", style: "value", align: "left", dx: 6 }, encoding: { text: { field: "eur", type: "quantitative", format: ",d" } } },
+    ],
+  };
+
+  const months = ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12"];
+  const sent = [1210, 1105, 1320, 1288, 1402, 1530, 1680, 1615, 1390, 1355, 1290, 1720];
+  const recv = [1350, 1240, 1410, 1395, 1520, 1610, 1810, 1755, 1480, 1460, 1405, 1905];
+  const msgs = months.flatMap((m, i) => [{ month: m + "-01", who: "Received", count: recv[i] }, { month: m + "-01", who: "Sent", count: sent[i] }]);
+  const lineSpec = {
+    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+    title: { text: "Messages per month", subtitle: "All chats, 2025" },
+    width: "container", height: 240,
+    data: { values: msgs },
+    encoding: {
+      x: { field: "month", type: "temporal", timeUnit: "yearmonth", title: null, axis: { format: "%b", tickCount: 12 } },
+      y: { field: "count", type: "quantitative", title: "messages", scale: { zero: true } },
+      color: { field: "who", type: "nominal", title: null, sort: ["Received", "Sent"], legend: { orient: "top", direction: "horizontal" } },
+      tooltip: [{ field: "month", type: "temporal", timeUnit: "yearmonth", title: "Month", format: "%B %Y" }, { field: "who", title: "Direction" }, { field: "count", title: "Messages", format: "," }],
+    },
+    layer: [
+      { mark: "line" },
+      { mark: "point", transform: [{ filter: "month(datum.month) === 11" }] },
+    ],
+  };
+
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const heat = [];
+  for (let d = 0; d < 7; d++) for (let hr = 0; hr < 24; hr++) {
+    const weekend = d >= 5;
+    const wake = weekend ? 9.5 : 7;
+    const day = Math.exp(-(((hr - (weekend ? 15 : 13)) / (weekend ? 5 : 4.2)) ** 2));
+    const eve = Math.exp(-(((hr - 21) / 1.6) ** 2)) * (d === 4 || d === 5 ? 1.25 : 0.9);
+    const night = hr < wake && hr > 1 ? 0.05 : hr <= 1 ? 0.35 : 1;
+    const jitter = ((d * 31 + hr * 17) % 11) / 40;
+    heat.push({ day: days[d], hour: hr, count: Math.max(1, Math.round((day * 38 + eve * 52) * night + jitter * 12)) });
+  }
+  const heatSpec = {
+    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+    title: { text: "When you message", subtitle: "Messages sent by hour and weekday, 2025" },
+    width: "container", height: 168,
+    data: { values: heat },
+    mark: "rect",
+    encoding: {
+      x: { field: "hour", type: "ordinal", title: "hour of day", axis: { labelExpr: "datum.value % 3 === 0 ? datum.label : ''" } },
+      y: { field: "day", type: "ordinal", sort: days, title: null },
+      color: { field: "count", type: "quantitative", title: "messages", legend: { orient: "top", direction: "horizontal", gradientLength: 160 } },
+      tooltip: [{ field: "day", title: "Day" }, { field: "hour", title: "Hour" }, { field: "count", title: "Messages" }],
+    },
+  };
+
+  const people = ["Ada Sample", "Bram Fixture", "Cleo Mock", "Dev Null", "Eve Example", "Finn Stub"];
+  const ranks = {
+    2021: ["Ada Sample", "Bram Fixture", "Cleo Mock", "Dev Null", "Eve Example"],
+    2022: ["Ada Sample", "Cleo Mock", "Bram Fixture", "Eve Example", "Dev Null"],
+    2023: ["Cleo Mock", "Ada Sample", "Eve Example", "Bram Fixture", "Finn Stub"],
+    2024: ["Cleo Mock", "Eve Example", "Ada Sample", "Finn Stub", "Bram Fixture"],
+    2025: ["Eve Example", "Cleo Mock", "Finn Stub", "Ada Sample", "Dev Null"],
+    2026: ["Eve Example", "Finn Stub", "Cleo Mock", "Dev Null", "Ada Sample"],
+  };
+  /* One line segment per unbroken run, so a contact who drops out of the top five
+     leaves a gap instead of a line drawn across the years they were missing. */
+  const years = Object.keys(ranks).map(Number);
+  const bump = [];
+  for (const name of people) {
+    let run = 0, prev = false;
+    for (const y of years) {
+      const r = ranks[y].indexOf(name);
+      if (r < 0) { if (prev) run++; prev = false; continue; }
+      bump.push({ year: y, name, rank: r + 1, run: `${name} ${run}` });
+      prev = true;
+    }
+  }
+  const bumpSpec = {
+    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+    title: { text: "Who you talk to, year by year", subtitle: "Rank by messages, top five each year" },
+    width: "container", height: 240,
+    padding: { left: 4, top: 4, bottom: 4, right: 92 }, /* room for the end labels */
+    data: { values: bump },
+    encoding: {
+      x: { field: "year", type: "ordinal", title: null },
+      y: { field: "rank", type: "ordinal", title: "rank", scale: { domain: [1, 2, 3, 4, 5] } },
+      tooltip: [{ field: "name", title: "Contact" }, { field: "year", title: "Year" }, { field: "rank", title: "Rank" }],
+    },
+    layer: [
+      { mark: "line", encoding: { detail: { field: "run" }, order: { field: "year" }, color: { field: "name", type: "nominal", title: null, scale: { domain: people }, legend: { orient: "top", direction: "horizontal", columns: 3 } } } },
+      { mark: "point", encoding: { color: { field: "name", type: "nominal", scale: { domain: people } } } },
+      { transform: [{ filter: "datum.year === 2026" }], mark: { type: "text", style: "label", align: "left", dx: 10 }, encoding: { text: { field: "name" } } },
+    ],
+  };
+
+  const opts = { config: theme, actions: false, renderer: "svg", tooltip: { theme: "custom" } };
+  const charts = [["#chart-bar", barSpec], ["#chart-line", lineSpec], ["#chart-heat", heatSpec], ["#chart-bump", bumpSpec]];
+  window.sherdPreviewSpecs = Object.fromEntries(charts.map(([el, spec]) => [el.slice(7), spec]));
+  Promise.all(charts.map(([el, spec]) => vegaEmbed(el, spec, opts))).then(() => {
+    document.documentElement.dataset.chartsReady = "true";
+  }).catch((err) => {
+    document.documentElement.dataset.chartsReady = "error";
+    console.error(err);
+  });
+
+  const top = spend[0], least = spend[spend.length - 1], total = spend.reduce((a, b) => a + b.eur, 0);
+  document.getElementById("sum-bar").textContent = `${top.merchant} took the most, €${fmt(top.eur)} of the €${fmt(total)} spent at these six merchants; ${least.merchant} the least, €${fmt(least.eur)}.`;
+  mount("#tbl-bar", table([["merchant", "Merchant"], ["eurf", "Spent (€)", true]], spend.map((d) => ({ ...d, eurf: fmt(d.eur) }))));
+
+  const peakI = recv.indexOf(Math.max(...recv));
+  document.getElementById("sum-line").textContent = `You received more messages than you sent every month. Both peaked in December (${fmt(recv[peakI])} received, ${fmt(sent[peakI])} sent) and were lowest in February.`;
+  mount("#tbl-line", table([["m", "Month"], ["s", "Sent", true], ["r", "Received", true]],
+    months.map((m, i) => ({ m: new Date(m + "-01T12:00:00").toLocaleString("en-GB", { month: "long" }), s: fmt(sent[i]), r: fmt(recv[i]) }))));
+
+  const peak = heat.reduce((a, b) => (b.count > a.count ? b : a));
+  const quiet = heat.filter((d) => d.hour >= 3 && d.hour <= 6).reduce((a, b) => a + b.count, 0);
+  document.getElementById("sum-heat").textContent = `Busiest hour: ${peak.day} at ${peak.hour}:00 (${peak.count} messages). Evenings around 21:00 are busy all week; 03:00 to 06:00 is nearly silent (${quiet} messages across the whole week).`;
+  const hrs = [0, 3, 6, 9, 12, 15, 18, 21];
+  mount("#tbl-heat", table([["day", "Day"], ...hrs.map((x) => [String(x), `${x}:00`, true])],
+    days.map((d) => Object.fromEntries([["day", d], ...hrs.map((x) => [String(x), heat.find((c) => c.day === d && c.hour === x).count])]))));
+
+  document.getElementById("sum-bump").textContent = "Ada Sample was first in 2021 and 2022 and fifth by 2026. Eve Example rose from fifth to first. Finn Stub entered the top five in 2023 and was second in 2026.";
+  mount("#tbl-bump", table([["year", "Year"], ["1", "1st"], ["2", "2nd"], ["3", "3rd"], ["4", "4th"], ["5", "5th"]],
+    Object.entries(ranks).map(([y, n]) => ({ year: y, 1: n[0], 2: n[1], 3: n[2], 4: n[3], 5: n[4] }))));
+})();
+</script>
+</body>
+</html>

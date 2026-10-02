@@ -413,6 +413,31 @@ class Store:
             raise QueryNotAllowedError(f"only reads are allowed, got {statement.type.name}")
         return self._conn.execute(statement, list(params)).to_arrow_table()
 
+    def export(
+        self, sql: str, params: Sequence[object], path: Path, fmt: Literal["csv", "parquet"]
+    ) -> int:
+        """Stream one read query to a file, including on a read-only store.
+
+        This allows external file writes, so sandboxed stores refuse it. As with query(),
+        callers must provide trusted SQL; values remain bound parameters.
+        """
+        statements = self._conn.extract_statements(sql)
+        if len(statements) != 1:
+            raise QueryNotAllowedError(f"expected one statement, got {len(statements)}")
+        statement = statements[0]
+        if statement.type != duckdb.StatementType.SELECT:
+            raise QueryNotAllowedError(f"only reads are allowed, got {statement.type.name}")
+        if fmt not in ("csv", "parquet"):
+            raise ValueError("export format must be csv or parquet")
+        options = "FORMAT CSV, HEADER" if fmt == "csv" else "FORMAT PARQUET, COMPRESSION ZSTD"
+        # DuckDB COPY filenames cannot be bound parameters; escape the SQL string literal.
+        target = str(path).replace("'", "''")
+        query = statement.query.rstrip().removesuffix(";")
+        result = self._conn.execute(
+            f"COPY ({query}) TO '{target}' ({options})", list(params)
+        ).fetchone()
+        return int(result[0]) if result else 0
+
     def table_counts(self) -> dict[str, int]:
         """Rows per fact table."""
         union = " UNION ALL ".join(

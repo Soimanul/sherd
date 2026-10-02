@@ -45,7 +45,10 @@ def register(app: typer.Typer) -> None:
         ] = None,
         force: Annotated[bool, typer.Option(help="Delete the database and rebuild it")] = False,
     ) -> None:
-        """Build a demo database from synthetic data, so you can explore without exports."""
+        """Build a demo database from synthetic data, so you can explore without exports.
+
+        Example: sherd demo
+        """
         console = Console(soft_wrap=True)
         path = db or demo_db_path()
         start = time.perf_counter()
@@ -55,8 +58,13 @@ def register(app: typer.Typer) -> None:
                     stale.unlink(missing_ok=True)
             seen, inserted, counts = build(path)
         except (OSError, ValueError, StoreError, registry.RegistryError, duckdb.Error) as error:
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd demo --help"
+            message += "."
             Console(stderr=True, soft_wrap=True).print(
-                f"[red]error:[/] {escape(str(error))}", highlight=False
+                f"[red]error:[/] {escape(message)}",
+                highlight=False,
             )
             raise typer.Exit(1) from None
         seconds = time.perf_counter() - start

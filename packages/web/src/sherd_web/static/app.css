@@ -2293,3 +2293,249 @@ pre {
     grid-column: 1;
   }
 }
+
+/* ---- Wrapped (WP-18): the year's cards, a year picker and two privacy toggles - */
+.wrapped-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-5) var(--space-8);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+}
+
+.wrapped-field {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-2);
+}
+
+.wrapped-select {
+  appearance: none;
+  min-width: 13rem;
+  height: var(--control-height);
+  padding: 0 var(--space-8) 0 var(--space-3);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23ccc2ba' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: border-color var(--dur-instant) ease;
+}
+
+.wrapped-select:focus-visible {
+  border-color: var(--color-focus);
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+}
+
+.wrapped-select option {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.wrapped-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.wrapped-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-height);
+  cursor: pointer;
+}
+
+/* The real checkbox stays in the accessibility tree and takes focus; the track draws it. */
+.wrapped-toggle input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.wrapped-switch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.wrapped-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-text-2);
+  transition:
+    translate var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.wrapped-toggle input:checked + .wrapped-switch {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.wrapped-toggle input:checked + .wrapped-switch::after {
+  translate: 16px 0;
+  background: var(--color-on-accent);
+}
+
+.wrapped-toggle input:focus-visible + .wrapped-switch {
+  box-shadow: var(--focus-ring);
+}
+
+.wrapped-toggle-text {
+  display: grid;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--color-text-3);
+}
+
+.wrapped-toggle-text strong {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.wrapped-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: calc(var(--space-3) * -1);
+  font-size: var(--text-sm);
+  color: var(--color-text-3);
+}
+
+.wrapped-deck {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8) var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wrapped-card figure {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.wrapped-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-3);
+}
+
+.wrapped-card figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.wrapped-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font-weight: var(--weight-medium);
+  color: var(--color-text-2);
+}
+
+.wrapped-card-number {
+  color: var(--color-accent-text);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wrapped-deck > * {
+    animation: surface var(--dur-slow) var(--ease-out) backwards;
+  }
+
+  .wrapped-deck > :nth-child(2) {
+    animation-delay: 40ms;
+  }
+
+  .wrapped-deck > :nth-child(3) {
+    animation-delay: 80ms;
+  }
+
+  .wrapped-deck > :nth-child(4) {
+    animation-delay: 120ms;
+  }
+
+  .wrapped-deck > :nth-child(n + 5) {
+    animation-delay: 160ms;
+  }
+}
+
+@media (max-width: 1100px) {
+  .wrapped-deck {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .wrapped-controls {
+    padding: var(--space-4);
+  }
+
+  .wrapped-select {
+    width: 100%;
+  }
+
+  .wrapped-field {
+    flex: 1 1 100%;
+  }
+
+  .wrapped-deck {
+    gap: var(--space-6) var(--space-4);
+  }
+
+  .wrapped-card figcaption {
+    flex-direction: column;
+    align-items: start;
+    gap: var(--space-1);
+  }
+
+  .wrapped-card-title {
+    font-size: var(--text-sm);
+  }
+
+  .wrapped-card figcaption .btn {
+    margin-left: calc(var(--space-2) * -1);
+  }
+}

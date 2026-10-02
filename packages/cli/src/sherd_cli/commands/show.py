@@ -54,7 +54,10 @@ def register(app: typer.Typer) -> None:
         list_only: Annotated[bool, typer.Option("--list")] = False,
         markdown: Annotated[bool, typer.Option("--markdown")] = False,
     ) -> None:
-        """Explore deterministic insights from your imported messages."""
+        """Explore deterministic insights from your imported messages.
+
+        Example: sherd show --demo
+        """
         console = Console(soft_wrap=True)
         try:
             digs = registry.discover()
@@ -111,5 +114,13 @@ def register(app: typer.Typer) -> None:
                 table.add_row(*(Text(str(row[name])) for name in computed.data.column_names))
             console.print(table)
         except (OSError, ValueError, ZoneInfoNotFoundError, StoreError, duckdb.Error) as error:
-            Console(stderr=True).print(f"error: {error}", markup=False, highlight=False)
+            message = " ".join(str(error).splitlines()).rstrip(".; ")
+            if not any(step in message.lower() for step in ("run ", "choose ", "check ", "use ")):
+                message += ". Run sherd show --help"
+            message += "."
+            Console(stderr=True, soft_wrap=True).print(
+                f"error: {message}",
+                markup=False,
+                highlight=False,
+            )
             raise typer.Exit(1) from None

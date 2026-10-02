@@ -762,11 +762,15 @@ name = "sherd-connectors"
 version = "0.0.0"
 source = { editable = "packages/connectors" }
 dependencies = [
+    { name = "pyyaml" },
     { name = "sherd-core" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "sherd-core", editable = "packages/core" }]
+requires-dist = [
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "sherd-core", editable = "packages/core" },
+]
 
 [[package]]
 name = "sherd-core"

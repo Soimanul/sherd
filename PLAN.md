@@ -359,7 +359,7 @@ class DigResult:
 class Dig(Protocol):
     id: str                             # 'messages.volume_by_contact'
     title: str
-    requires: list[str]                 # tables that must have rows, e.g. ['messages']
+    requires: list[str]                 # tables that must have rows, e.g. ['messages']; [] = any fact table has rows
     def compute(self, store: Store, params: DigParams) -> DigResult: ...
 ```
 

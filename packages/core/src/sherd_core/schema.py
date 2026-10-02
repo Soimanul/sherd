@@ -4,7 +4,7 @@ A migration is the list of statements that takes the database from `version - 1`
 Never edit a released migration: add a new version and bump `SCHEMA_VERSION`.
 """
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SESSION_SETUP = ("SET TimeZone = 'UTC'",)
 
@@ -113,4 +113,13 @@ CREATE TABLE imports (
     "CREATE TABLE schema_meta (key VARCHAR PRIMARY KEY, value VARCHAR)",
 )
 
-MIGRATIONS: dict[int, tuple[str, ...]] = {1: _V1}
+MIGRATIONS: dict[int, tuple[str, ...]] = {
+    1: _V1,
+    2: (
+        """CREATE TABLE contact_decisions (
+        a VARCHAR, b VARCHAR,
+        decision VARCHAR CHECK (decision IN ('merge', 'reject')),
+        decided_at TIMESTAMPTZ, PRIMARY KEY (a, b)
+    )""",
+    ),
+}

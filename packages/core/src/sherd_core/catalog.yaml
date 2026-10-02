@@ -1,7 +1,7 @@
 # Table and column descriptions of the canonical sherd schema (PLAN §4.2).
 # Read by the agent when it writes SQL and by the docs. Every table and column must be described;
 # a test derives the list from the live schema.
-schema_version: 1
+schema_version: 2
 description: >-
   sherd keeps one person's exported personal data (chats, listening history, bank transactions,
   browsing and search history, location) in a single DuckDB database. The five fact tables
@@ -66,8 +66,9 @@ tables:
       sender_name: Sender's display name as exported; NULL for system messages.
       is_from_me: TRUE when the owner of the export sent the message.
       contact_id: >-
-        contacts.id of the sender, filled by entity resolution; NULL until it has run and for
-        system messages.
+        Filled by entity resolution. In direct chats every message, including self and system
+        rows, belongs to the unique counterpart. In groups only non-self sender messages are
+        linked; self/system messages stay NULL. NULL before resolution or when ambiguous.
       ts: When the message was sent, UTC.
       text: Message text; NULL for media without a caption and for deleted messages.
       kind: >-
@@ -159,17 +160,25 @@ tables:
       here.
     columns:
       id: Primary key, uuid4 hex.
-      display_name: Preferred name to show for the person.
-      aliases: VARCHAR[] of other names the person appears under; use list_contains(aliases, '...').
+      display_name: Most frequent WhatsApp name variant, otherwise the exported counterparty.
+      aliases: VARCHAR[] of all name variants the person appears under; use list_contains(aliases, '...').
       identities: >-
         VARCHAR[] of the per-source identities merged into this contact: messages.sender_id values
-        and transactions.counterparty values.
+        and bank:name: keys formed from normalised transfer counterparties.
       sources: VARCHAR[] of connector ids in which the person appears, e.g. ['whatsapp', 'bank_csv'].
       merged_into: >-
         contacts.id of the contact this one was merged into, or NULL if it is current. Rows with a
         non-NULL merged_into are superseded.
       created_at: When the contact was created, UTC.
       updated_at: When the contact was last changed, UTC.
+
+  contact_decisions:
+    description: Persistent user decisions between unordered identity pairs; rejected pairs are never proposed again and confirmed merges always apply.
+    columns:
+      a: Lexicographically first identity key of the pair.
+      b: Lexicographically second identity key of the pair.
+      decision: "'merge' to confirm linking or 'reject' to prevent linking."
+      decided_at: UTC time of the most recent user decision.
 
   imports:
     description: One row per import run of a connector over an export.

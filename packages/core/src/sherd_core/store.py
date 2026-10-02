@@ -234,6 +234,107 @@ class Store:
             self._conn.unregister(_BATCH_VIEW)
         return inserted
 
+    def replace_contacts(self, contacts: Iterable[dict[str, object]]) -> None:
+        """Atomically replace the derived contact snapshot, including superseded ids."""
+        self._require_writable()
+        self._conn.begin()
+        try:
+            self._conn.execute("DELETE FROM contacts")
+            for contact in contacts:
+                self._conn.execute(
+                    "INSERT INTO contacts VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        contact[key]
+                        for key in (
+                            "id",
+                            "display_name",
+                            "aliases",
+                            "identities",
+                            "sources",
+                            "merged_into",
+                            "created_at",
+                            "updated_at",
+                        )
+                    ],
+                )
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
+
+    def decide_contacts(self, a: str, b: str, decision: Literal["merge", "reject"]) -> None:
+        """Persist a decision for a canonical, unordered pair of identity keys."""
+        self._require_writable()
+        if a == b or decision not in ("merge", "reject"):
+            raise ValueError("expected distinct identities and merge or reject")
+        a, b = sorted((a, b))
+        self._conn.execute(
+            "INSERT OR REPLACE INTO contact_decisions VALUES (?, ?, ?, ?)",
+            [a, b, decision, datetime.now(UTC)],
+        )
+
+    def assign_contacts(
+        self, assignments: dict[str, str], counterparties: dict[str, str]
+    ) -> tuple[int, int]:
+        """Assign identities to facts; direct chats use their unique counterpart.
+
+        Ambiguous direct chats stay NULL. Group self/system messages and non-transfers
+        stay NULL. Return counts of changed rows, including cleared assignments.
+        """
+        self._require_writable()
+        mapping = pa.table(
+            {
+                "identity": pa.array(list(assignments), type=pa.string()),
+                "contact": pa.array(list(assignments.values()), type=pa.string()),
+            }
+        )
+        self._conn.register("_contact_assignments", mapping)
+        parties = pa.table(
+            {
+                "party": pa.array(list(counterparties), type=pa.string()),
+                "contact": pa.array(list(counterparties.values()), type=pa.string()),
+            }
+        )
+        self._conn.register("_contact_parties", parties)
+        self._conn.begin()
+        try:
+            messages = self._conn.execute("""
+                WITH counterparts AS (
+                    SELECT source, chat_id, min(a.contact) AS contact
+                    FROM messages m JOIN _contact_assignments a ON m.sender_id = a.identity
+                    WHERE NOT m.is_from_me AND m.chat_kind = 'direct'
+                    GROUP BY source, chat_id HAVING count(DISTINCT a.contact) = 1
+                ), desired AS (
+                    SELECT m.id, CASE WHEN m.chat_kind = 'direct' THEN c.contact
+                        WHEN NOT m.is_from_me THEN a.contact END AS contact
+                    FROM messages m LEFT JOIN counterparts c
+                        ON m.source = c.source AND m.chat_id = c.chat_id
+                    LEFT JOIN _contact_assignments a ON m.sender_id = a.identity
+                )
+                UPDATE messages SET contact_id = d.contact FROM desired d
+                WHERE messages.id = d.id AND messages.contact_id IS DISTINCT FROM d.contact
+            """).fetchone()
+            # Bank keys use the resolver's Unicode normalisation, rather than SQL lower().
+            transactions = self._conn.execute("""
+                UPDATE transactions SET contact_id = a.contact
+                FROM (SELECT t.id, p.contact FROM transactions t
+                    LEFT JOIN _contact_parties p ON t.counterparty = p.party
+                        AND t.kind = 'transfer') a
+                WHERE transactions.id = a.id
+                    AND transactions.contact_id IS DISTINCT FROM a.contact
+            """).fetchone()
+            self._conn.commit()
+            return (
+                int(messages[0]) if messages else 0,
+                int(transactions[0]) if transactions else 0,
+            )
+        except BaseException:
+            self._conn.rollback()
+            raise
+        finally:
+            self._conn.unregister("_contact_assignments")
+            self._conn.unregister("_contact_parties")
+
     # -- reads ---------------------------------------------------------------------------------
 
     def query(self, sql: str, params: Sequence[object] = ()) -> pa.Table:

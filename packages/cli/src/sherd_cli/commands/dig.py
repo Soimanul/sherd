@@ -15,6 +15,7 @@ from sherd_connectors import registry
 from sherd_connectors.base import Connector, DetectResult, ImportContext, export_root
 from sherd_connectors.pipeline import run_import
 from sherd_core import Store
+from sherd_core.entities import resolve
 from sherd_core.paths import default_db_path
 from sherd_core.store import StoreError
 
@@ -160,6 +161,7 @@ def dig_export(
         ctx = ImportContext(export_root(path), ZoneInfo(zone), frozenset(identities))
         try:
             stats = run_import(store, connector, path, ctx)
+            resolve(store)
         except Exception as error:
             if os.environ.get(DEBUG_ENV) == "1":
                 raise

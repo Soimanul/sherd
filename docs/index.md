@@ -16,7 +16,7 @@
 
 ```sh
 curl -LsSf https://raw.githubusercontent.com/Soimanul/sherd/main/scripts/install.sh | sh
-sherd demo && sherd web
+sherd demo && sherd web --demo
 ```
 
 No account. No cloud. No telemetry. The demo uses synthetic data, so you can explore before importing anything.

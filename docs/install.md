@@ -18,6 +18,6 @@ Or use pipx:
 pipx install sherd-cli
 ```
 
-Then run `sherd demo && sherd web`. If your shell cannot find `sherd`, restart it or add `~/.local/bin` to `PATH`.
+Then run `sherd demo && sherd web --demo`. If your shell cannot find `sherd`, restart it or add `~/.local/bin` to `PATH`.
 
 Pin a release with `SHERD_VERSION=0.1.0`; install from a local wheel directory with `SHERD_FIND_LINKS=/path/to/wheels`. Preview the script with `SHERD_DRY_RUN=1`.

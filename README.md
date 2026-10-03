@@ -4,7 +4,7 @@ Point sherd at the exports you already own. See your life in charts, ask it ques
 
 ```sh
 curl -LsSf https://raw.githubusercontent.com/Soimanul/sherd/main/scripts/install.sh | sh
-sherd demo && sherd web
+sherd demo && sherd web --demo
 ```
 
 [Read the docs](https://soimanul.github.io/sherd/) for supported exports, local LLM setup and privacy details.

@@ -1,6 +1,7 @@
 """Bounded-memory parsing of WhatsApp chat exports."""
 
 import logging
+import os
 import re
 import unicodedata
 import zipfile
@@ -8,9 +9,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib import import_module
 from io import TextIOWrapper
 from pathlib import Path
-from typing import Literal, TextIO
+from typing import BinaryIO, Literal, Protocol, TextIO, cast
 from zoneinfo import ZoneInfo
 
 from sherd_core import Message, content_hash
@@ -173,13 +175,13 @@ class ChatFile:
     @contextmanager
     def open(self) -> Iterator[TextIO]:
         if self.member is None:
-            with self.path.open(encoding="utf-8-sig") as stream:
+            with self.path.open(encoding="utf-8-sig", errors="replace") as stream:
                 yield stream
         else:
             with (
                 zipfile.ZipFile(self.path) as archive,
                 archive.open(self.member) as raw,
-                TextIOWrapper(raw, encoding="utf-8-sig") as stream,
+                TextIOWrapper(raw, encoding="utf-8-sig", errors="replace") as stream,
             ):
                 yield stream
 
@@ -289,6 +291,111 @@ def media(text: str) -> tuple[MediaType, str | None] | None:
     return kind, match["caption"].strip() or None
 
 
+Kind = Literal["text", "media", "system", "deleted"]
+WallTime = tuple[int, int, int, int, int, int]
+ParsedRecord = tuple[WallTime | None, str | None, str, Kind, str | None, MediaType | None, bool]
+
+
+class RustParser(Protocol):
+    def detect_date_order(self, source: str | BinaryIO) -> DateOrder: ...
+
+    def RecordIterator(  # noqa: N802 — mirrors the native class constructor
+        self, source: str | BinaryIO, order: DateOrder, *, prefixes: bool = False
+    ) -> Iterator[list[ParsedRecord]]: ...
+
+
+def parser_backend() -> RustParser | None:
+    """Resolve per parse so the environment override also works in long-lived apps."""
+    if os.environ.get("SHERD_WA") == "python":
+        return None
+    try:
+        return cast(RustParser, import_module("sherd_wa"))
+    except ImportError:
+        return None
+
+
+@contextmanager
+def rust_source(file: ChatFile) -> Iterator[str | BinaryIO]:
+    if file.member is None:
+        yield str(file.path)
+    else:
+        with zipfile.ZipFile(file.path) as archive, archive.open(file.member) as raw:
+            yield cast(BinaryIO, raw)
+
+
+def file_date_order(file: ChatFile, backend: RustParser | None) -> DateOrder:
+    if backend is not None:
+        with rust_source(file) as source:
+            return backend.detect_date_order(source)
+    with file.open() as lines:
+        return detect_date_order(iter(lines))
+
+
+def message_records(
+    file: ChatFile, order: DateOrder, backend: RustParser | None, *, prefixes: bool = False
+) -> Iterator[ParsedRecord]:
+    """Shared text → primitive message boundary, also used by the manual benchmark."""
+    if backend is not None:
+        with rust_source(file) as source:
+            for batch in backend.RecordIterator(source, order, prefixes=prefixes):
+                yield from batch
+        return
+    if prefixes:
+        with file.open() as lines:
+            for line in lines:
+                match = prefix(marked_line(line.rstrip("\r\n")))
+                if match is not None:
+                    sender, body = split_body(match["body"])
+                    yield primitive_record(match, sender, body, order, prefixes=True)
+    else:
+        for match, sender, body in records(file):
+            yield primitive_record(match, sender, body, order)
+
+
+def primitive_record(
+    match: re.Match[str],
+    sender: str | None,
+    original: str,
+    order: DateOrder,
+    *,
+    prefixes: bool = False,
+) -> ParsedRecord:
+    try:
+        wall = wall_time(match, order)
+        fields: WallTime | None = (
+            wall.year,
+            wall.month,
+            wall.day,
+            wall.hour,
+            wall.minute,
+            wall.second,
+        )
+    except ValueError:
+        fields = None
+    kind: Kind = "text"
+    text = original or None
+    media_type: MediaType | None = None
+    if prefixes:
+        text = None
+    else:
+        if sender is None:
+            kind = "system"
+        elif original.strip().removesuffix(".").casefold() in _DELETED:
+            kind, text = "deleted", None
+        elif attachment := media(original):
+            kind = "media"
+            media_type, text = attachment
+    return (
+        fields,
+        sender,
+        original,
+        kind,
+        text,
+        media_type,
+        sender is None and _GROUP.search(original) is not None,
+    )
+
+
 class WhatsAppConnector:
     id = "whatsapp"
     version = "2"
@@ -307,46 +414,41 @@ class WhatsAppConnector:
         return DetectResult(0.0, "No WhatsApp chat text")
 
     def parse(self, path: Path, ctx: ImportContext) -> Iterator[Message]:
+        backend = parser_backend()
         skipped = unnamed = emitted = 0
         for file in sorted(chat_files(path), key=lambda file: (file.path, file.member or "")):
-            with file.open() as lines:
-                order = detect_date_order(iter(lines))
+            order = file_date_order(file, backend)
             senders: set[str] = set()
             group = False
             fallback: str | None = None
             # Only prefixes are needed for chat-wide metadata, not multiline text.
-            with file.open() as lines:
-                for line in lines:
-                    match = prefix(marked_line(line.rstrip("\r\n")))
-                    if match is None:
-                        continue
-                    try:
-                        wall_time(match, order)
-                    except ValueError:
-                        continue
-                    sender, body = split_body(match["body"])
-                    group |= sender is None and _GROUP.search(body) is not None
-                    if sender:
-                        if len(senders) < 3:
-                            senders.add(
-                                "self"
-                                if is_self(sender, ctx.self_identities)
-                                else sender_id(sender)
-                            )
-                        if fallback is None and not is_self(sender, ctx.self_identities):
-                            fallback = sender
+            for fields, sender, _body, _, _, _, is_group in message_records(
+                file, order, backend, prefixes=True
+            ):
+                if fields is None:
+                    continue
+                group |= is_group
+                if sender:
+                    if len(senders) < 3:
+                        senders.add(
+                            "self" if is_self(sender, ctx.self_identities) else sender_id(sender)
+                        )
+                    if fallback is None and not is_self(sender, ctx.self_identities):
+                        fallback = sender
             name = file.chat_name() or fallback
             chat_id = content_hash("whatsapp", normalise_name(name)) if name else None
             source_file = file.source_file(ctx.export_root)
             # The coordinator contract permits counters to reset at each timestamp.
             counts: dict[str, int] = {}
             previous_ts: str | None = None
-            for match, sender, original in records(file):
-                try:
-                    ts = timestamp(match, order, ctx.tz)
-                except ValueError:
+            for fields, sender, original, kind, text, media_type, _ in message_records(
+                file, order, backend
+            ):
+                if fields is None:
                     skipped += 1
                     continue
+                aware = datetime(*fields, tzinfo=ctx.tz, fold=0)
+                ts = aware.astimezone(UTC).astimezone(ctx.tz)
                 if sender == "":
                     skipped += 1
                     continue
@@ -362,16 +464,6 @@ class WhatsAppConnector:
                 key = content_hash(chat_id, timestamp_key, sender, original)
                 occurrence = counts.get(key, 0)
                 counts[key] = occurrence + 1
-                kind: Literal["text", "media", "system", "deleted"] = "text"
-                text: str | None = original or None
-                media_type: MediaType | None = None
-                if sender is None:
-                    kind = "system"
-                elif original.strip().removesuffix(".").casefold() in _DELETED:
-                    kind, text = "deleted", None
-                elif attachment := media(original):
-                    kind = "media"
-                    media_type, text = attachment
                 emitted += 1
                 yield Message(
                     source_file=source_file,

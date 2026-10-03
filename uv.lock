@@ -17,6 +17,7 @@ members = [
     "sherd-core",
     "sherd-insights",
     "sherd-mcp",
+    "sherd-wa",
     "sherd-web",
 ]
 
@@ -1639,6 +1640,7 @@ dependencies = [
     { name = "ijson" },
     { name = "pyyaml" },
     { name = "sherd-core" },
+    { name = "sherd-wa" },
 ]
 
 [package.metadata]
@@ -1646,6 +1648,7 @@ requires-dist = [
     { name = "ijson", specifier = ">=3.4" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "sherd-core", editable = "packages/core" },
+    { name = "sherd-wa", editable = "crates/sherd-wa" },
 ]
 
 [[package]]
@@ -1714,6 +1717,11 @@ requires-dist = [
     { name = "sherd-core", editable = "packages/core" },
     { name = "sherd-insights", editable = "packages/insights" },
 ]
+
+[[package]]
+name = "sherd-wa"
+version = "0.0.0"
+source = { editable = "crates/sherd-wa" }
 
 [[package]]
 name = "sherd-web"

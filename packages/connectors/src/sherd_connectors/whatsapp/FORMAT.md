@@ -33,6 +33,7 @@ directory probe still needs to visit every candidate, so cost scales with the di
   greater than 12 means D/M; second greater than 12 means M/D. Otherwise twelve-hour
   clocks mean M/D and 24-hour clocks mean D/M. D/M wins conflicting hints; rows invalid
   under that order are skipped. Mixing locale date orders in one chat is unsupported.
+- Invalid UTF-8 bytes are replaced with U+FFFD in loose text and zip members.
 - A leading UTF-8 BOM and U+200E, U+200F, U+202A–U+202E, U+2066–U+2069 are removed.
   Emoji, including variation selectors, skin tones and joiners, remain intact.
 

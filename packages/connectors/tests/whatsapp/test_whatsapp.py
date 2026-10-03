@@ -4,6 +4,7 @@ import shutil
 import zipfile
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,17 @@ from sherd_connectors.whatsapp.synth_whatsapp import Locale, WhatsAppGenerator
 from sherd_core import Message, Store, content_hash
 
 VARIANTS = {path.name: path for path in CONNECTOR.fixtures()}
+
+
+@pytest.fixture(autouse=True, params=["python", "rust"])
+def parser_mode(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    if request.param == "rust":
+        import_module(
+            "sherd_wa"
+        )  # A missing/broken native build must fail, never silently fall back.
+        monkeypatch.delenv("SHERD_WA", raising=False)
+    else:
+        monkeypatch.setenv("SHERD_WA", "python")
 
 
 def parse_text(tmp_path: Path, text: str, *, name: str = "_chat.txt") -> list[Message]:
@@ -535,3 +547,118 @@ def test_review_detection_stops_before_remaining_directory(
 
     monkeypatch.setattr(Path, "rglob", paths)
     assert CONNECTOR.detect(tmp_path).confidence == 0.98
+
+
+@pytest.mark.parametrize("backend", ["python", "rust"])
+@pytest.mark.parametrize("variant", sorted(VARIANTS))
+def test_both_parsers_match_goldens(
+    backend: str, variant: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sherd_connectors.testing import assert_golden
+
+    if backend == "rust":
+        import sherd_wa
+
+        assert sherd_wa.RecordIterator is not None
+        monkeypatch.delenv("SHERD_WA", raising=False)
+    else:
+        monkeypatch.setenv("SHERD_WA", "python")
+    assert_golden(CONNECTOR, VARIANTS[variant])
+
+
+@pytest.mark.parametrize("backend", ["python", "rust"])
+@pytest.mark.parametrize("zipped", [False, True])
+def test_invalid_utf8_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, backend: str, *, zipped: bool
+) -> None:
+    monkeypatch.setenv("SHERD_WA", backend)
+    data = b"13/01/2024, 09:00 - Mira Example: synthetic \xff text\n"
+    path = tmp_path / "_chat.txt"
+    if zipped:
+        path = tmp_path / "synthetic.zip"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("_chat.txt", data)
+    else:
+        path.write_bytes(data)
+    ctx = ImportContext(tmp_path, ZoneInfo("UTC"), frozenset())
+    rows = list(CONNECTOR.parse(path, ctx))
+    assert len(rows) == 1
+    assert rows[0].text == "synthetic \ufffd text"
+
+
+def test_missing_rust_module_falls_back(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sherd_connectors.whatsapp import parser
+
+    monkeypatch.delenv("SHERD_WA", raising=False)
+
+    def missing(name: str) -> None:
+        assert name == "sherd_wa"
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr(parser, "import_module", missing)
+    assert parse_text(tmp_path, "13/01/2024, 09:00 - Mira Example: synthetic\n")[0].text == (
+        "synthetic"
+    )
+
+
+def test_python_override_does_not_import_rust(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sherd_connectors.whatsapp import parser
+
+    monkeypatch.setenv("SHERD_WA", "python")
+
+    def unexpected(name: str) -> None:
+        pytest.fail(f"forced Python attempted import: {name}")
+
+    monkeypatch.setattr(parser, "import_module", unexpected)
+    assert parse_text(tmp_path, "13/01/2024, 09:00 - Mira Example: synthetic\n")[0].text == (
+        "synthetic"
+    )
+
+
+@pytest.mark.parametrize("chunk_size", [1, 2, 7, 65536])
+def test_native_chunk_boundaries_and_primitives(tmp_path: Path, chunk_size: int) -> None:
+    from io import BytesIO
+
+    import sherd_wa
+    from sherd_connectors.whatsapp.parser import ChatFile, file_date_order, message_records
+
+    data = (
+        "\ufeff[١٣/٠١/٢٠٢٤, ٩:٠٠:٠٥] Mira Example: synthetic 🌙\r\n"  # noqa: RUF001 — Unicode decimal digit parity.
+        "continuation\r"
+        "[14/01/2024, 09:01:00] Mira Example: IMAGE OMITTED caption\n"
+        "[14/01/2024, 09:02:00] Mira Example: synthetic.PDF (FILE ATTACHED)\r\n"
+        "[31/02/2024, 09:03:00] Mira Example: invalid\n"
+        "[14/01/2024, 09:04:00] Mira Example: \u200eMissed voice call.\n"
+    ).encode() + b"[14/01/2024, 09:05:00] Mira Example: invalid \xff byte\n"
+    path = tmp_path / "_chat.txt"
+    path.write_bytes(data)
+    file = ChatFile(path)
+    order = file_date_order(file, None)
+
+    class Chunks(BytesIO):
+        def read(self, size: int | None = -1) -> bytes:
+            return super().read(min(size if size is not None else chunk_size, chunk_size))
+
+    assert sherd_wa.detect_date_order(Chunks(data)) == order
+    for prefixes in (False, True):
+        actual = [
+            record
+            for batch in sherd_wa.RecordIterator(Chunks(data), order, prefixes=prefixes)
+            for record in batch
+        ]
+        assert actual == list(message_records(file, order, None, prefixes=prefixes))
+
+
+def test_native_errors_become_python_exceptions() -> None:
+    import sherd_wa
+
+    class BrokenStream:
+        def read(self, size: int) -> bytes:
+            raise ValueError("synthetic read failure")
+
+    with pytest.raises(OSError, match="synthetic read failure"):
+        next(sherd_wa.RecordIterator(BrokenStream(), "dm"))  # type: ignore[arg-type]  # Deliberately broken stream.
+    with pytest.raises(ValueError, match="order must be"):
+        sherd_wa.RecordIterator("synthetic.txt", "invalid")  # type: ignore[arg-type]  # Invalid FFI input.

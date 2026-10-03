@@ -1,0 +1,203 @@
+/*
+ * sherd design tokens.
+ *
+ * The one source of design values for the web UI. Components read these
+ * custom properties; nothing else hard-codes a colour, size or duration.
+ * The Vega-Lite theme (sherd_insights/theme/sherd.vega.json) repeats the
+ * chart-facing values as plain hex, because vl-convert cannot read CSS.
+ * Change a value here and there together; preview.html shows both.
+ *
+ * Dark is the only theme in v1. Every text/surface and chart/surface pair
+ * below is contrast-checked (see the table in design/preview.html, which is
+ * computed from these properties at load time).
+ */
+
+/* Fonts: vendored, OFL-1.1, licences in fonts/. No font CDN.
+ * Fira Sans 4.203 and Fira Mono 3.206, from github.com/google/fonts (ofl/). */
+@font-face {
+  font-family: "Fira Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/FiraSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fira Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/FiraSans-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/FiraMono-Regular.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Surfaces: warm charcoal, darkest at the back ---------------------- */
+  --color-bg: #171412;            /* page */
+  --color-surface-1: #1f1c19;     /* cards, panels, chart background */
+  --color-surface-2: #282421;     /* inputs, raised rows, code */
+  --color-surface-3: #312d29;     /* hover on surface-2, pressed rows */
+  --color-line: #403b37;          /* hairline dividers (decorative) */
+  --color-line-strong: #817a75;   /* control borders: >= 3:1 on bg, surface-1, surface-2 */
+
+  /* ---- Text: bone on charcoal --------------------------------------------- */
+  --color-text: #f3ebe3;          /* primary */
+  --color-text-2: #ccc2ba;        /* secondary */
+  --color-text-3: #aea49c;        /* muted: captions, axis labels, placeholders */
+  --color-text-disabled: #6d6863; /* disabled controls only (WCAG-exempt) */
+
+  /* ---- Accent: fired clay ------------------------------------------------- */
+  --color-accent: #cd6b44;        /* primary action fill, selection, current item */
+  --color-accent-hover: #dc7a4e;
+  --color-accent-press: #bf623e;
+  --color-on-accent: #130e0c;     /* text on accent fills */
+  --color-accent-text: #ec9668;   /* links and accent text on dark surfaces */
+  --color-accent-soft: #41261b;   /* tinted wash: selected rows, active nav */
+
+  /* ---- Semantic: always paired with an icon and a word -------------------- */
+  --color-success: #73c881;
+  --color-success-soft: #1d3120;
+  --color-warning: #ebb854;
+  --color-warning-soft: #392b11;
+  --color-danger: #f16f78;
+  --color-danger-soft: #412022;
+  --color-info: #76bbe2;
+  --color-info-soft: #192e3a;
+
+  /* ---- Privacy: the "0 bytes sent" counter and nothing else --------------- */
+  --color-privacy: #61e68f;
+  --color-privacy-soft: #14301c;
+
+  /* ---- Focus -------------------------------------------------------------- */
+  --color-focus: #f5c076;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+  --focus-ring: 0 0 0 var(--focus-offset) var(--color-bg),
+    0 0 0 calc(var(--focus-offset) + var(--focus-width)) var(--color-focus);
+
+  /* ---- Charts (mirrored in sherd.vega.json) ------------------------------- */
+  /* Categorical: fixed order, assigned in sequence, never cycled. A 9th
+   * series folds into "Other". Scatter/small multiples: first 3 slots only. */
+  --chart-cat-1: #cf6139;         /* terracotta */
+  --chart-cat-2: #0c9485;         /* verdigris */
+  --chart-cat-3: #7563c0;         /* iris */
+  --chart-cat-4: #b98918;         /* ochre */
+  --chart-cat-5: #aa487b;         /* mulberry */
+  --chart-cat-6: #759b3d;         /* moss */
+  --chart-cat-7: #407bc5;         /* lapis */
+  --chart-cat-8: #cc7580;         /* rose */
+  /* Sequential: one hue (clay to sand), low to high. Every step >= 3:1 on
+   * bg and surface-1, so empty cells use --chart-empty instead of step 1. */
+  --chart-seq-1: #b94d23;
+  --chart-seq-2: #cb632e;
+  --chart-seq-3: #dc7b3e;
+  --chart-seq-4: #ea9453;
+  --chart-seq-5: #f6ae6e;
+  --chart-seq-6: #fec890;
+  --chart-seq-7: #ffe3c2;
+  /* Diverging: clay <- neutral -> lapis. */
+  --chart-div-1: #d47452;
+  --chart-div-2: #ae6d56;
+  --chart-div-3: #896a5c;
+  --chart-div-mid: #6d6864;
+  --chart-div-5: #607489;
+  --chart-div-6: #5c83af;
+  --chart-div-7: #6295d4;
+  --chart-grid: #2e2a27;          /* hairline gridlines */
+  --chart-axis: #514c48;          /* baseline / domain */
+  --chart-empty: #282421;         /* no data (heatmap cell with zero) */
+
+  /* ---- Typography --------------------------------------------------------- */
+  --font-sans: "Fira Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Fira Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Fixed rem scale, ratio ~1.2. Product UI, so no fluid type. */
+  --text-xs: 0.75rem;     /* 12px  tags, axis labels */
+  --text-sm: 0.8125rem;   /* 13px  captions, table cells, hints */
+  --text-base: 0.9375rem; /* 15px  body, controls */
+  --text-md: 1.0625rem;   /* 17px  card titles */
+  --text-lg: 1.25rem;     /* 20px  section titles */
+  --text-xl: 1.5rem;      /* 24px  page titles */
+  --text-2xl: 1.875rem;   /* 30px  headline stats */
+  --text-3xl: 2.5rem;     /* 40px  Wrapped and empty-state titles */
+  --text-4xl: 3.5rem;     /* 56px  the privacy counter */
+
+  --leading-tight: 1.15;  /* display numbers, headings >= xl */
+  --leading-snug: 1.3;    /* headings, labels */
+  --leading-normal: 1.5;  /* body */
+  --leading-code: 1.6;    /* SQL */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --tracking-tight: -0.015em; /* headings >= lg */
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;    /* small all-caps tags only */
+
+  --measure: 68ch;        /* prose line length */
+
+  /* ---- Spacing: 4px grid -------------------------------------------------- */
+  --space-0: 0;
+  --space-1: 0.25rem;   /* 4 */
+  --space-2: 0.5rem;    /* 8 */
+  --space-3: 0.75rem;   /* 12 */
+  --space-4: 1rem;      /* 16 */
+  --space-5: 1.25rem;   /* 20 */
+  --space-6: 1.5rem;    /* 24 */
+  --space-8: 2rem;      /* 32 */
+  --space-10: 2.5rem;   /* 40 */
+  --space-12: 3rem;     /* 48 */
+  --space-16: 4rem;     /* 64 */
+  --space-20: 5rem;     /* 80 */
+
+  --control-height-sm: 2rem;    /* 32 */
+  --control-height: 2.5rem;     /* 40 */
+  --control-height-lg: 3rem;    /* 48 */
+
+  /* ---- Radii -------------------------------------------------------------- */
+  --radius-xs: 3px;     /* tags, chart bar ends use 4 in the theme */
+  --radius-sm: 6px;     /* inputs, buttons */
+  --radius-md: 10px;    /* cards */
+  --radius-lg: 16px;    /* dialogs, empty-state panels */
+  --radius-pill: 999px;
+
+  /* ---- Shadows: offset + soft blur, warm black. Dark UIs need few. -------- */
+  --shadow-1: 0 1px 2px rgb(5 3 2 / 0.45);
+  --shadow-2: 0 1px 0 rgb(255 240 228 / 0.035) inset, 0 4px 12px -4px rgb(5 3 2 / 0.6);
+  --shadow-3: 0 1px 0 rgb(255 240 228 / 0.05) inset, 0 16px 40px -12px rgb(5 3 2 / 0.75);
+
+  /* ---- Motion: fast, ease-out, state changes only ------------------------- */
+  --dur-instant: 80ms;   /* colour on hover */
+  --dur-fast: 140ms;     /* press, toggles */
+  --dur-base: 200ms;     /* popovers, menus */
+  --dur-slow: 280ms;     /* panels, dialogs */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --press-scale: 0.97;
+  --motion-distance: 6px; /* how far things travel when they enter */
+
+  /* ---- Layers ------------------------------------------------------------- */
+  --z-sticky: 10;
+  --z-popover: 30;
+  --z-dialog: 40;
+  --z-toast: 50;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* Colour and opacity still fade; nothing moves or scales. */
+    --press-scale: 1;
+    --motion-distance: 0px;
+    --dur-base: 120ms;
+    --dur-slow: 160ms;
+  }
+}

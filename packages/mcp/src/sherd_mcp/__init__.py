@@ -1,3 +1,5 @@
 """The sherd mcp package."""
 
-__version__ = "0.0.0"
+from importlib.metadata import version as _version
+
+__version__ = _version("sherd-mcp")

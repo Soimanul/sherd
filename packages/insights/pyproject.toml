@@ -1,12 +1,25 @@
 [project]
 name = "sherd-insights"
-version = "0.0.0"
+version = "0.1.0"
 requires-python = ">=3.12"
+description = "Deterministic insights and charts for your data"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Vlad Soimu" }]
+keywords = ["personal-data", "privacy", "local-first"]
+classifiers = ["Programming Language :: Python :: 3", "Programming Language :: Python :: 3.12", "Operating System :: MacOS", "Operating System :: POSIX :: Linux"]
+
+
+
 dependencies = [
-    'sherd-core>=0.0.0',
+    'sherd-core>=0.1.0,<0.2',
     'pyarrow>=19',
     'vl-convert-python>=1.9',
 ]
+
+[project.urls]
+Homepage = "https://github.com/Soimanul/sherd"
+Source = "https://github.com/Soimanul/sherd"
 
 [build-system]
 requires = ["uv_build>=0.12"]

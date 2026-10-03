@@ -1,7 +1,19 @@
 [project]
 name = "sherd-wa"
-version = "0.0.0"
+version = "0.1.0"
 requires-python = ">=3.12"
+description = "Fast WhatsApp export parser"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Vlad Soimu" }]
+keywords = ["personal-data", "privacy", "local-first"]
+classifiers = ["Programming Language :: Python :: 3", "Programming Language :: Python :: 3.12", "Operating System :: MacOS", "Operating System :: POSIX :: Linux"]
+
+
+
+[project.urls]
+Homepage = "https://github.com/Soimanul/sherd"
+Source = "https://github.com/Soimanul/sherd"
 
 [build-system]
 requires = ["maturin>=1.9,<2"]

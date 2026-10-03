@@ -2,6 +2,7 @@ import json
 import time
 from collections.abc import Iterator
 from datetime import datetime
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,12 @@ def run(*args: str) -> Result:
     return CliRunner().invoke(create_app(), ["demo", *args])
 
 
+def test_version_matches_installed_distribution() -> None:
+    result = CliRunner().invoke(create_app(), ["version"])
+    assert result.exit_code == 0
+    assert result.stdout.strip() == f"sherd {version('sherd-cli')}"
+
+
 def imports(db: Path) -> list[dict[str, object]]:
     with Store.open(db, read_only=True) as store:
         result: list[dict[str, object]] = store.query(
@@ -89,6 +96,20 @@ def test_demo_builds_from_fixtures_and_synth(home: Path) -> None:
         assert name in result.stdout
         assert f"{count:,}" in result.stdout
     assert f"{sum(table.values()):,} new rows" in result.stdout
+
+
+def test_demo_without_source_tree_fixtures(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class NoInstalledFixtures(FixtureConnector):
+        def fixtures(self) -> list[Path]:
+            raise FileNotFoundError("source-tree fixtures are absent")
+
+    monkeypatch.setattr(
+        registry, "discover", lambda: {"fixture_lines": NoInstalledFixtures(home.parent)}
+    )
+    result = run()
+    assert result.exit_code == 0, result.output
+    assert "using synthetic demo data" in result.stdout
+    assert 40_000 < sum(counts(home / "demo.duckdb").values()) < 60_000
 
 
 def test_second_run_inserts_nothing_and_force_rebuilds(home: Path) -> None:

@@ -28,10 +28,19 @@ def build(path: Path) -> tuple[int, int, dict[str, int]]:
     """
     seen = inserted = 0
     with Store.open(path) as store:
+        missing_fixtures = False
         for connector in registry.discover().values():
-            for variant in variants(connector):
+            try:
+                source_variants = variants(connector)
+            except FileNotFoundError:
+                # Source-tree golden fixtures are intentionally absent from installed wheels.
+                missing_fixtures = True
+                continue
+            for variant in source_variants:
                 stats = run_import(store, connector, export_path(variant), load_meta(variant))
                 seen, inserted = seen + stats.seen, inserted + stats.inserted
+        if missing_fixtures:
+            typer.echo("Fixture exports are not installed; using synthetic demo data.")
         stats = synth.import_profile(store, "demo")
         seen, inserted = seen + stats.seen, inserted + stats.inserted
         return seen, inserted, store.table_counts()

@@ -1,0 +1,36 @@
+site_name: sherd
+site_url: https://soimanul.github.io/sherd/
+site_description: Find the shape of your life in the exports you already own.
+repo_url: https://github.com/Soimanul/sherd
+docs_dir: docs
+site_dir: site
+strict: true
+hooks:
+  - docs/generate.py
+theme:
+  name: material
+  logo: assets/owl.svg
+  favicon: assets/owl.svg
+  font: false
+  palette:
+    scheme: slate
+    primary: custom
+    accent: custom
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+extra_css:
+  - assets/tokens.css
+  - assets/site.css
+nav:
+  - Home: index.md
+  - Install: install.md
+  - Quickstart: quickstart.md
+  - Connectors: connectors/index.md
+  - Digs: digs/index.md
+  - Ask and providers: ask.md
+  - MCP: mcp.md
+  - Wrapped: wrapped.md
+  - Privacy: privacy.md
+  - Write a connector: write-a-connector.md

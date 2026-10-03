@@ -7,6 +7,7 @@ and `expected.jsonl`.
 
 import json
 import os
+import resource
 import subprocess
 import sys
 import tempfile
@@ -182,11 +183,33 @@ def assert_golden(connector: Connector, variant: Path) -> None:
 
 # -- streaming -------------------------------------------------------------------------------
 
+
+def _linux_peak_rss_kb(status: str) -> int:
+    for line in status.splitlines():
+        if line.startswith("VmHWM:"):
+            value, unit = line.split()[1:]
+            if unit != "kB":
+                raise ValueError(f"unexpected VmHWM unit: {unit}")
+            return int(value)
+    raise ValueError("VmHWM missing from /proc/self/status")
+
+
+def _read_proc_status() -> str:
+    return Path("/proc/self/status").read_text(encoding="utf-8")
+
+
+def _peak_rss() -> int:
+    if sys.platform == "linux":
+        return _linux_peak_rss_kb(_read_proc_status())
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+
+
 _CHILD = """
-import importlib, importlib.util, json, resource, sys
+import importlib, importlib.util, json, sys
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from sherd_connectors.base import ImportContext, export_root
+from sherd_connectors.testing import _peak_rss
 
 kind, *ref = json.loads(sys.argv[1])
 if kind == "registry":
@@ -204,7 +227,7 @@ else:
 path = Path(sys.argv[2])
 ctx = ImportContext(export_root(path), ZoneInfo(sys.argv[3]), frozenset())
 rows = sum(1 for _ in connector.parse(path, ctx))
-peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+peak = _peak_rss()
 print(rows)
 print(peak)
 """

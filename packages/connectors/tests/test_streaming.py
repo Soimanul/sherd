@@ -1,17 +1,37 @@
 import random
+import resource
 import subprocess
 import sys
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from sherd_connectors import testing
 from sherd_connectors.base import DetectResult, ImportContext
 from sherd_connectors.synth.raw import RawGenerator
 from sherd_connectors.testing import assert_streaming, measure_streaming
 from sherd_core import Event, Row
 
 MB = 2**20
+
+
+def test_linux_peak_rss_parses_proc_status() -> None:
+    status = "Name:\tpython\nVmPeak:\t9999 kB\nVmHWM:\t123456 kB\nVmRSS:\t123 kB\n"
+    assert testing._linux_peak_rss_kb(status) == 123456
+
+
+def test_peak_rss_uses_proc_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(testing, "_read_proc_status", lambda: "VmHWM:\t2048 kB\n")
+    assert testing._peak_rss() == 2048
+
+
+def test_peak_rss_uses_rusage_on_macos(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(resource, "getrusage", lambda who: SimpleNamespace(ru_maxrss=4096))
+    assert testing._peak_rss() == 4096
 
 
 class StreamingLines:

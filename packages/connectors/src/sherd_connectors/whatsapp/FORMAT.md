@@ -133,7 +133,8 @@ other integrated connector fixture; it asserts that cross-connector candidates e
 `source_row_id` hashes the localized timestamp ISO string, as contracted. Importing
 the same export with a different timezone changes the interpreted instant and its row
 id; always reuse the export timezone. Unnamed chat ids instead hash the first record's
-UTC timestamp. These formulas deliberately remain unchanged in connector version 2.
+UTC timestamp. These formulas deliberately remain unchanged in connector version 3.
+Invalid UTF-8 bytes are replaced with U+FFFD by both parsers.
 Loose iOS files use the first non-self sender as the name rather than extracting the
 subject from notices: `ios-ro-group` is named `Mira Example`, not `Luni de hârtie`.
 Starting a later export at a different participant can therefore change its chat id

@@ -126,6 +126,27 @@ def test_date_order_detection(lines: list[str], order: str) -> None:
     assert detect_date_order(iter(lines)) == order
 
 
+def test_date_order_mixed_leading_marks_parity(tmp_path: Path) -> None:
+    from sherd_connectors.whatsapp.parser import ChatFile, file_date_order
+
+    path = tmp_path / "_chat.txt"
+    path.write_text("\u200e\ufeff01/13/24, 09:00 - Mira Example: synthetic\n")
+    file = ChatFile(path)
+    assert file_date_order(file, None) == file_date_order(file, import_module("sherd_wa")) == "md"
+
+
+def test_group_notice_blank_continuation_parity(tmp_path: Path) -> None:
+    from sherd_connectors.whatsapp.parser import ChatFile, message_records
+
+    path = tmp_path / "_chat.txt"
+    path.write_text("13/01/2024, 09:00 - Mira Example left\n\n")
+    file = ChatFile(path)
+    python = list(message_records(file, "dm", None))
+    rust = list(message_records(file, "dm", import_module("sherd_wa")))
+    assert python == rust
+    assert python[0][-1] is True
+
+
 @pytest.mark.parametrize("locale", ["en-US", "en-GB", "ro-RO", "de-DE"])
 @pytest.mark.parametrize("ios", [False, True])
 def test_synth_four_locales(tmp_path: Path, locale: Locale, ios: bool) -> None:
@@ -599,6 +620,42 @@ def test_missing_rust_module_falls_back(tmp_path: Path, monkeypatch: pytest.Monk
     assert parse_text(tmp_path, "13/01/2024, 09:00 - Mira Example: synthetic\n")[0].text == (
         "synthetic"
     )
+
+
+def test_broken_rust_import_warns_and_falls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from sherd_connectors.whatsapp import parser
+
+    monkeypatch.delenv("SHERD_WA", raising=False)
+
+    def broken(name: str) -> None:
+        raise OSError("private native loader detail")
+
+    monkeypatch.setattr(parser, "import_module", broken)
+    assert (
+        parse_text(tmp_path, "13/01/2024, 09:00 - Mira Example: synthetic\n")[0].text == "synthetic"
+    )
+    assert [record.message for record in caplog.records if record.levelname == "WARNING"] == [
+        "sherd_wa import failed: OSError"
+    ]
+    assert "private native loader detail" not in caplog.text
+
+
+@pytest.mark.parametrize("failure", [ModuleNotFoundError, OSError])
+def test_forced_rust_import_failure_raises(
+    monkeypatch: pytest.MonkeyPatch, failure: type[Exception]
+) -> None:
+    from sherd_connectors.whatsapp import parser
+
+    monkeypatch.setenv("SHERD_WA", "rust")
+
+    def broken(name: str) -> None:
+        raise failure("private native loader detail")
+
+    monkeypatch.setattr(parser, "import_module", broken)
+    with pytest.raises(RuntimeError, match="SHERD_WA=rust"):
+        parser.parser_backend()
 
 
 def test_python_override_does_not_import_rust(

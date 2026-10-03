@@ -558,6 +558,11 @@ mod tests {
         );
     }
     #[test]
+    fn group_notice_with_blank_continuation() {
+        assert!(GROUP.is_match("Mira Example left\n"));
+        assert!(!GROUP.is_match("Mira Example left\nmore"));
+    }
+    #[test]
     fn date_order_detection() {
         let mut hints = DateHints::default();
         assert_eq!(hints.order(), "dm");

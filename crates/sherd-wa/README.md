@@ -5,8 +5,11 @@ for Python 3.12 and later. `uv sync --all-packages` builds the workspace package
 Stable Rust (minimum 1.88) is required for source builds.
 
 The connector selects Rust when `sherd_wa` imports successfully. Set
-`SHERD_WA=python` to force the reference parser; a missing extension automatically
-falls back to Python. Detection remains the existing fast Python sample probe.
+`SHERD_WA=python` to force the reference parser or `SHERD_WA=rust` to require the
+extension. A missing extension falls back to Python; a broken native import logs
+one warning with the exception class before falling back. Detection remains the
+existing fast Python sample probe. The native package is the `fast` extra of
+`sherd-connectors`; `sherd-cli` installs that extra.
 
 Rust owns file/chunk reading, universal newlines, replacement UTF-8 decoding,
 invisible marks, prefix/date-order detection, wall-clock validation, continuation
@@ -74,11 +77,12 @@ uv run python crates/sherd-wa/benches/benchmark.py /tmp/sherd-wa-1gb.txt
 
 This generates at least 1 GiB using the merged `WhatsAppGenerator` (en-US, seed 4)
 from `synth_whatsapp.py`. Each measurement runs in a fresh Python process, consumes
-rows without retaining them, and reports elapsed time, count, and peak RSS. The
+rows without retaining them, and reports elapsed time, count, canonical-record
+SHA-256, and peak RSS. The
 `records` measurement includes date-order detection and text → primitive records
 with timestamp parsing and classification on both sides; it excludes chat metadata,
 timezones, hashes, and Pydantic construction. `connector` measures complete
-`connector.parse` without database insertion. Equal counts are required. Times are
+`connector.parse` without database insertion. Equal counts and digests are required. Times are
 manual evidence, not gate assertions.
 
 Measured on 2026-10-03, Apple M5 / macOS arm64, Python 3.12.14, Rust 1.97.1,

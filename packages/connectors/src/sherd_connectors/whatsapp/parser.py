@@ -119,7 +119,7 @@ def detect_date_order(lines: Iterator[str]) -> DateOrder:
     """Unambiguous fields override the clock heuristic, across the entire chat."""
     dm = md = twelve = False
     for line in lines:
-        match = prefix(clean(line.lstrip("\ufeff")).rstrip("\r\n"))
+        match = prefix(marked_line(line.rstrip("\r\n")))
         if match:
             valid = False
             for candidate in ("dm", "md"):
@@ -310,7 +310,14 @@ def parser_backend() -> RustParser | None:
         return None
     try:
         return cast(RustParser, import_module("sherd_wa"))
-    except ImportError:
+    except ModuleNotFoundError as exc:
+        if os.environ.get("SHERD_WA") == "rust":
+            raise RuntimeError("SHERD_WA=rust requires the sherd_wa extension") from exc
+        return None
+    except Exception as exc:
+        if os.environ.get("SHERD_WA") == "rust":
+            raise RuntimeError("SHERD_WA=rust could not import the sherd_wa extension") from exc
+        logger.warning("sherd_wa import failed: %s", type(exc).__name__)
         return None
 
 
@@ -398,7 +405,7 @@ def primitive_record(
 
 class WhatsAppConnector:
     id = "whatsapp"
-    version = "2"
+    version = "3"
     display_name = "WhatsApp"
 
     def detect(self, path: Path) -> DetectResult:

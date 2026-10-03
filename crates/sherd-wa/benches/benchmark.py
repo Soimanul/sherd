@@ -4,6 +4,7 @@ Run: uv run python crates/sherd-wa/benches/benchmark.py /tmp/sherd-wa-1gb.txt
 """
 
 import argparse
+import hashlib
 import json
 import os
 import resource
@@ -30,17 +31,37 @@ def measure(path: Path, backend: str, layer: str) -> None:
     if backend == "rust" and native is None:
         raise RuntimeError("Rust import failed; refusing to benchmark the fallback")
     start = perf_counter()
+    digest = hashlib.sha256()
     if layer == "records":
         file = ChatFile(path)
         order = file_date_order(file, native)
-        rows = sum(1 for _ in message_records(file, order, native))
+        stream = message_records(file, order, native)
     else:
         ctx = ImportContext(path.parent, ZoneInfo("Europe/Bucharest"), frozenset({"Alex Demo"}))
-        rows = sum(1 for _ in CONNECTOR.parse(path, ctx))
+        stream = CONNECTOR.parse(path, ctx)
+    rows = 0
+    for record in stream:
+        value = record if layer == "records" else record.model_dump(mode="json")
+        digest.update(
+            json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        )
+        digest.update(b"\n")
+        rows += 1
     elapsed = perf_counter() - start
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     rss_mb = rss / (1024**2 if sys.platform == "darwin" else 1024)
-    print(json.dumps(dict(backend=backend, layer=layer, rows=rows, seconds=elapsed, rss_mb=rss_mb)))
+    print(
+        json.dumps(
+            dict(
+                backend=backend,
+                layer=layer,
+                rows=rows,
+                sha256=digest.hexdigest(),
+                seconds=elapsed,
+                rss_mb=rss_mb,
+            )
+        )
+    )
 
 
 def main() -> None:
@@ -72,6 +93,7 @@ def main() -> None:
             results[layer, backend] = json.loads(result.stdout)
         py, rs = results[layer, "python"], results[layer, "rust"]
         assert py["rows"] == rs["rows"]
+        assert py["sha256"] == rs["sha256"]
         print(json.dumps(dict(layer=layer, speedup=py["seconds"] / rs["seconds"])), flush=True)
 
 

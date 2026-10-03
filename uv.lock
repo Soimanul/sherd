@@ -1609,7 +1609,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "rich" },
     { name = "sherd-agent" },
-    { name = "sherd-connectors" },
+    { name = "sherd-connectors", extra = ["fast"] },
     { name = "sherd-core" },
     { name = "sherd-insights" },
     { name = "sherd-mcp" },
@@ -1623,7 +1623,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1" },
     { name = "rich", specifier = ">=14" },
     { name = "sherd-agent", editable = "packages/agent" },
-    { name = "sherd-connectors", editable = "packages/connectors" },
+    { name = "sherd-connectors", extras = ["fast"], editable = "packages/connectors" },
     { name = "sherd-core", editable = "packages/core" },
     { name = "sherd-insights", editable = "packages/insights" },
     { name = "sherd-mcp", editable = "packages/mcp" },
@@ -1640,6 +1640,10 @@ dependencies = [
     { name = "ijson" },
     { name = "pyyaml" },
     { name = "sherd-core" },
+]
+
+[package.optional-dependencies]
+fast = [
     { name = "sherd-wa" },
 ]
 
@@ -1648,8 +1652,9 @@ requires-dist = [
     { name = "ijson", specifier = ">=3.4" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "sherd-core", editable = "packages/core" },
-    { name = "sherd-wa", editable = "crates/sherd-wa" },
+    { name = "sherd-wa", marker = "extra == 'fast'", editable = "crates/sherd-wa" },
 ]
+provides-extras = ["fast"]
 
 [[package]]
 name = "sherd-core"

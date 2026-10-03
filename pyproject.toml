@@ -2,8 +2,7 @@
 members = ["packages/*", "crates/sherd-wa"]
 
 [dependency-groups]
-docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10"]
-dev = ["ruff>=0.12", "mypy>=1.17", "pytest>=8", "pytest-socket>=0.7", "pre-commit>=4"]
+dev = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10", "ruff>=0.12", "mypy>=1.17", "pytest>=8", "pytest-socket>=0.7", "pre-commit>=4"]
 
 [tool.ruff]
 line-length = 100

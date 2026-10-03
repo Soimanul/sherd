@@ -13,29 +13,13 @@
  */
 
 /* Fonts: vendored, OFL-1.1, licences in fonts/. No font CDN.
- * Fira Sans 4.203 and Fira Mono 3.206, from github.com/google/fonts (ofl/).
- * fonts/ttf/ holds the same Fira Sans faces as TTF for vl-convert, which
- * does not read woff2. */
+ * Fira Sans 4.203 and Fira Mono 3.206, from github.com/google/fonts (ofl/). */
 @font-face {
   font-family: "Fira Sans";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
   src: url("fonts/FiraSans-Regular.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Sans";
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-  src: url("fonts/FiraSans-Italic.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Sans";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("fonts/FiraSans-Medium.woff2") format("woff2");
 }
 @font-face {
   font-family: "Fira Sans";
@@ -50,13 +34,6 @@
   font-weight: 400;
   font-display: swap;
   src: url("fonts/FiraMono-Regular.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Mono";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("fonts/FiraMono-Medium.woff2") format("woff2");
 }
 
 :root {

@@ -42,6 +42,8 @@ def on_pre_build(config: object) -> None:
                 "",
                 f"`{dig_id}`",
                 "",
+                f"Shows {dig.title.lower()} from your local data.",
+                "",
                 f"Requires: {', '.join(dig.requires) if dig.requires else 'any data'}.",
                 "",
             )

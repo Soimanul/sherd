@@ -1,5 +1,6 @@
 """Docs are complete and do not load third-party resources."""
 
+import re
 import subprocess
 import sys
 from html.parser import HTMLParser
@@ -17,11 +18,13 @@ class RemoteResources(HTMLParser):
         self.urls: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        values = dict(attrs)
-        if tag in {"script", "img", "iframe", "source"}:
-            self.urls.append(values.get("src") or "")
-        if tag == "link" and values.get("rel") != "canonical":
-            self.urls.append(values.get("href") or "")
+        for name, value in attrs:
+            if tag == "a" or (
+                tag == "link" and name == "href" and "canonical" in (dict(attrs).get("rel") or "")
+            ):
+                continue
+            if name in {"src", "href"}:
+                self.urls.append(value or "")
 
 
 def test_docs_build_and_coverage(tmp_path: Path) -> None:
@@ -39,6 +42,7 @@ def test_docs_build_and_coverage(tmp_path: Path) -> None:
         "curl -LsSf https://raw.githubusercontent.com/Soimanul/sherd/main/scripts/install.sh | sh"
         in landing
     )
+    assert "sherd demo &amp;&amp; sherd web --demo" in landing
     connector_index = (site / "connectors/index.html").read_text()
     for connector_id in connectors():
         assert connector_id in connector_index
@@ -46,6 +50,7 @@ def test_docs_build_and_coverage(tmp_path: Path) -> None:
     digs_index = (site / "digs/index.html").read_text()
     for dig_id in digs():
         assert dig_id in digs_index
+        assert f"Shows {digs()[dig_id].title.lower()} from your local data." in digs_index
     for html in site.rglob("*.html"):
         parser = RemoteResources()
         parser.feed(html.read_text())
@@ -54,6 +59,7 @@ def test_docs_build_and_coverage(tmp_path: Path) -> None:
         text = css.read_text()
         assert "url(https:" not in text, css
         assert "url(http:" not in text, css
+        assert not re.search(r"@import\s+(?:url\s*\()?\s*[\"']?(?:https?:|//)", text, re.I), css
 
 
 def test_distribution_licenses_match_root() -> None:

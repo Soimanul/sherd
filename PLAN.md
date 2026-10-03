@@ -493,12 +493,14 @@ Work is dispatched to a **tier**, never to a model by name; this table is the on
 | tier | work | current model (since, evidence) |
 | --- | --- | --- |
 | `deep` | contracts and data model (WP-02/03), cross-cutting builds, design with taste (WP-14a/14b/15), plan critiques | Claude Opus 5.5, high (carried over from the Ema S16/S17a head-to-head, 2026-09-25) |
-| `standard` | well-specified builds with logic (connectors, digs, agent pieces); fix rounds that need judgement | Codex `gpt-6.1-sol`, medium (2026-10-02, T1); reviewer of a Codex build: Claude Sonnet 5.5 |
-| `light` | mechanical work: scaffolding, config, CI, docs, tests from a list, fix rounds from a findings list | Codex `gpt-6.1-sol`, low (2026-10-02, T1); `gpt-6-luna` stays a candidate for a findings-list fix trial |
+| `standard` | well-specified builds with logic (connectors, digs, agent pieces); fix rounds that need judgement | Codex `gpt-6-sol`, medium (2026-10-03: Vlad moved off `gpt-6.1-sol`; T1 on 6.1); reviewer of a Codex build: Claude Sonnet 5.5 |
+| `light` | mechanical work: scaffolding, config, CI, docs, tests from a list, fix rounds from a findings list | Codex `gpt-6-sol`, low (2026-10-03, T2) |
 
 The coordinator is Opus and is not a tier. A row changes only on evidence: when a provider releases a model, or two WPs in a row from a tier need more than one fix round, the coordinator runs one trial — candidate and current model on the same WP at the same `dev` commit, a blind cross-model review, cost from the session logs. The cheapest model that matches the best review wins; the row records the date and the trial.
 
 **Trial T1 (2026-10-02):** WP-01 built four times from the same `dev` commit and spec. Result: `gpt-6.1-sol` medium best (blind review 29/30; ≈66k fresh input, 10k output) and merged; Sonnet 5.5 second (24/30; IBAN/phone scanner gaps; fastest; ≈58k cache-write, 22k output); `gpt-6-luna` third (17/30; static-import bypass, unix sockets blocked, thin tests; *more* tokens than sol: ≈98k fresh, 18k output); Haiku 4.5 failed acceptance (`sherd version` broken, a spec rule dropped, while reporting success; ≈137k cache-write, 50k output). Caveats: one task, and the blind reviewer was `gpt-6.1-sol` low; the coordinator re-ran the gates and confirmed the decisive scanner defects independently.
+
+**Trial T2 (2026-10-03):** the WP-19 review's findings list fixed four times from the same commit. Blind review (Sonnet, /25) and fresh input / output tokens: `gpt-6-sol` low 23 (≈62k / 8.3k) — best and leanest; `gpt-6-luna` xhigh 20 (≈125k / 29.8k); `gpt-6.1-sol` low 19 (≈71k / 6.9k; deleted a test the coordinator had corrected, though it was first to flag the spec error); `gpt-6-luna` medium 18 (≈115k / 12.9k). Luna needed about twice the input tokens and did not match the review, so `light` stays on `gpt-6-sol` low. Orca accepts Luna up to `xhigh` (not `max`). Workers send no heartbeats: only an ask when blocked and one completion message.
 
 **Budget:** Codex work stops when the weekly Codex limit reaches 30 % used (checked from the Codex session logs before every Codex dispatch).
 

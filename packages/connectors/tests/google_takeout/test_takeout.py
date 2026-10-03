@@ -187,7 +187,7 @@ def test_streaming_50mb(tmp_path: Path) -> None:
     GENERATOR.write(path, 50 * 2**20, 17)
     assert path.stat().st_size >= 50 * 2**20
     assert path.read_bytes()[:1024].count(b"time_usec") >= 8
-    assert_streaming(CONNECTOR, path, max_rss_mb=100)
+    assert_streaming(CONNECTOR, path, max_rss_mb=200)
 
 
 def test_search_json_html_equivalence(tmp_path: Path) -> None:

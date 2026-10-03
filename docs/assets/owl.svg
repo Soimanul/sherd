@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="owl-title">
+  <title id="owl-title">sherd owl holding a pottery sherd</title>
+  <defs>
+    <!-- the body stops at a gap just above the sherd's rim -->
+    <mask id="owl-body-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <path d="M5.6 44.6Q32 36.2 58.4 44.6L64 64H0Z" fill="#000"/>
+    </mask>
+  </defs>
+  <g mask="url(#owl-body-cut)">
+    <!-- body with ear tufts -->
+    <path fill="#c9b8a6" d="M11.5 37 11.8 17.5 13.6 8.6 17.6 13 23 15.2Q32 12.2 41 15.2L46.4 13 50.4 8.6 52.2 17.5 52.5 37C52.5 50 43.5 58.5 32 58.5S11.5 50 11.5 37Z"/>
+    <!-- breast feathers -->
+    <path fill="#a8937e" d="M11.5 31C14.2 37.6 20.6 41.6 32 41.6S49.8 37.6 52.5 31V44H11.5Z"/>
+  </g>
+  <!-- facial disc -->
+  <path fill="#e9ddcf" d="M32 19.8C28.6 16.6 24.6 15.4 21 16.2 15.3 17.5 13.4 23.8 15.6 29.4 17.4 34 22.5 36.8 27.6 35.6 29.6 35.1 31 34.2 32 33 33 34.2 34.4 35.1 36.4 35.6 41.5 36.8 46.6 34 48.4 29.4 50.6 23.8 48.7 17.5 43 16.2 39.4 15.4 35.4 16.6 32 19.8Z"/>
+  <!-- eyes -->
+  <circle cx="23.4" cy="26" r="7" fill="#1f1c19"/>
+  <circle cx="40.6" cy="26" r="7" fill="#1f1c19"/>
+  <circle cx="23.4" cy="26" r="4.2" fill="#f5c076"/>
+  <circle cx="40.6" cy="26" r="4.2" fill="#f5c076"/>
+  <circle cx="23.4" cy="26" r="2.2" fill="#1f1c19"/>
+  <circle cx="40.6" cy="26" r="2.2" fill="#1f1c19"/>
+  <circle cx="22.2" cy="24.6" r="0.9" fill="#f3ebe3"/>
+  <circle cx="39.4" cy="24.6" r="0.9" fill="#f3ebe3"/>
+  <!-- beak -->
+  <path fill="#3a322d" d="M29.2 32.4H34.8L32 38Z"/>
+  <!-- the sherd: a broken rim fragment of a bowl -->
+  <path fill="#cd6b44" d="M8.2 46.6Q32 39 55.8 46.6L54.6 51.4 44.2 58.2 33.4 55.4 19.6 58.8 9.4 51.6Z"/>
+  <path fill="#ea9453" d="M8.2 46.6Q32 39 55.8 46.6L55.3 48.6Q32 41.4 8.7 48.6Z"/>
+  <path fill="none" stroke="#9d4b28" stroke-width="1.2" stroke-linecap="round" d="M12.4 51.4Q32 45.2 51.6 51.4"/>
+  <!-- talons gripping the rim -->
+  <g fill="#3a322d">
+    <rect x="20.4" y="42.2" width="1.8" height="4" rx="0.9" transform="rotate(-8 21.3 44.2)"/>
+    <rect x="23.2" y="41.6" width="1.8" height="4.2" rx="0.9"/>
+    <rect x="26" y="41.2" width="1.8" height="4" rx="0.9" transform="rotate(8 26.9 43.2)"/>
+    <rect x="36.2" y="41.2" width="1.8" height="4" rx="0.9" transform="rotate(-8 37.1 43.2)"/>
+    <rect x="39" y="41.6" width="1.8" height="4.2" rx="0.9"/>
+    <rect x="41.8" y="42.2" width="1.8" height="4" rx="0.9" transform="rotate(8 42.7 44.2)"/>
+  </g>
+</svg>

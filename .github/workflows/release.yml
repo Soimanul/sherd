@@ -1,0 +1,175 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish artifacts to PyPI and create a GitHub release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  python-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv python install 3.12
+      - run: uv build --all-packages --out-dir dist
+      - run: find dist -name 'sherd_wa*.whl' -delete
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-artifacts
+          path: dist/*
+          if-no-files-found: error
+
+  rust-wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            id: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            id: linux-aarch64
+          - runner: macos-15-intel
+            id: macos-x86_64
+          - runner: macos-latest
+            id: macos-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv python install 3.12
+      - name: Build abi3 wheel
+        env:
+          # macOS 27 rejects some stripped Rust dylibs with misaligned LINKEDIT data.
+          RUSTFLAGS: -C strip=none
+        run: uvx maturin build --locked --release --manifest-path crates/sherd-wa/Cargo.toml --interpreter "$(uv python find 3.12)" --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-${{ matrix.id }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  install-smoke:
+    needs: [python-artifacts, rust-wheels]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv python install 3.12
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*"
+          merge-multiple: true
+          path: ${{ runner.temp }}/wheels
+      - name: uv tool install
+        shell: bash
+        run: |
+          export HOME="$RUNNER_TEMP/home-uv"
+          mkdir -p "$HOME"
+          export UV_TOOL_DIR="$HOME/tools" UV_TOOL_BIN_DIR="$HOME/bin" UV_CACHE_DIR="$HOME/cache"
+          uv tool install --find-links "$RUNNER_TEMP/wheels" sherd-cli==0.1.0
+          export PATH="$HOME/bin:$PATH"
+          sherd version && sherd demo && sherd show --list
+          sherd show --demo > "$RUNNER_TEMP/show"
+          test "$(wc -l < "$RUNNER_TEMP/show")" -ge 10
+          sherd wrapped --demo --out "$RUNNER_TEMP/w"
+      - name: pipx install
+        shell: bash
+        run: |
+          export HOME="$RUNNER_TEMP/home-pipx"
+          mkdir -p "$HOME"
+          export PIPX_HOME="$HOME/pipx" PIPX_BIN_DIR="$HOME/bin"
+          uvx --from pipx pipx install --pip-args "--find-links $RUNNER_TEMP/wheels" sherd-cli==0.1.0 --python "$(uv python find 3.12)"
+          export PATH="$HOME/bin:$PATH"
+          sherd version && sherd demo && sherd show --list
+          sherd show --demo > "$RUNNER_TEMP/show"
+          test "$(wc -l < "$RUNNER_TEMP/show")" -ge 10
+          sherd wrapped --demo --out "$RUNNER_TEMP/w"
+      - name: install.sh
+        shell: bash
+        run: |
+          export HOME="$RUNNER_TEMP/home-script"
+          mkdir -p "$HOME"
+          export SHERD_VERSION=0.1.0 SHERD_FIND_LINKS="$RUNNER_TEMP/wheels"
+          export UV_TOOL_DIR="$HOME/tools" UV_TOOL_BIN_DIR="$HOME/bin" UV_CACHE_DIR="$HOME/cache"
+          sh scripts/install.sh
+          export PATH="$HOME/bin:$PATH"
+          sherd version && sherd demo && sherd show --list
+          sherd show --demo > "$RUNNER_TEMP/show"
+          test "$(wc -l < "$RUNNER_TEMP/show")" -ge 10
+          sherd wrapped --demo --out "$RUNNER_TEMP/w"
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish == true)
+    needs: install-smoke
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*"
+          merge-multiple: true
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@v1.13.0
+        with:
+          packages-dir: dist/
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: install-smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*"
+          merge-multiple: true
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+            scripts/install.sh
+
+  pages:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: install-smoke
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv python install 3.12
+      - run: uv sync --locked --all-packages --group docs
+      - run: uv run --locked --group docs mkdocs build --strict
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

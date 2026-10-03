@@ -1,8 +1,21 @@
 [project]
 name = "sherd-cli"
-version = "0.0.0"
+version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ['sherd-core>=0.0.0', 'sherd-connectors[fast]>=0.0.0', 'sherd-insights>=0.0.0', 'sherd-agent>=0.0.0', 'sherd-web>=0.0.0', 'sherd-mcp>=0.0.0', 'typer>=0.16', 'rich>=14', 'duckdb>=1', 'textual>=8.2.8']
+description = "Explore the data exports you already own"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Vlad Soimu" }]
+keywords = ["personal-data", "privacy", "local-first"]
+classifiers = ["Programming Language :: Python :: 3", "Programming Language :: Python :: 3.12", "Operating System :: MacOS", "Operating System :: POSIX :: Linux"]
+
+
+
+dependencies = ['sherd-core>=0.1.0,<0.2', 'sherd-connectors[fast]>=0.1.0,<0.2', 'sherd-insights>=0.1.0,<0.2', 'sherd-agent>=0.1.0,<0.2', 'sherd-web>=0.1.0,<0.2', 'sherd-mcp>=0.1.0,<0.2', 'typer>=0.16', 'rich>=14', 'duckdb>=1', 'textual>=8.2.8']
+
+[project.urls]
+Homepage = "https://github.com/Soimanul/sherd"
+Source = "https://github.com/Soimanul/sherd"
 
 [build-system]
 requires = ["uv_build>=0.12"]

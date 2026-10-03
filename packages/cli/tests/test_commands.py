@@ -1,4 +1,5 @@
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,7 @@ from typer.testing import CliRunner
 def test_version_output() -> None:
     result = CliRunner().invoke(app, ["version"])
     assert result.exit_code == 0
-    assert result.output == "sherd 0.0.0\n"
+    assert result.output == f"sherd {version('sherd-cli')}\n"
 
 
 def test_discovery_registers_version() -> None:
@@ -28,7 +29,7 @@ def test_module_without_register(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     discovered = create_app()
     result = CliRunner().invoke(discovered, ["version"])
     assert result.exit_code == 0
-    assert result.output == "sherd 0.0.0\n"
+    assert result.output == f"sherd {version('sherd-cli')}\n"
 
 
 def test_discovery_runs_temporary_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -119,7 +119,7 @@ def detect_date_order(lines: Iterator[str]) -> DateOrder:
     """Unambiguous fields override the clock heuristic, across the entire chat."""
     dm = md = twelve = False
     for line in lines:
-        match = prefix(marked_line(line.rstrip("\r\n")))
+        match = prefix(clean(marked_line(line.rstrip("\r\n"))))
         if match:
             valid = False
             for candidate in ("dm", "md"):

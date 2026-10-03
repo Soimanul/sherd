@@ -32,21 +32,31 @@ def measure(path: Path, backend: str, layer: str) -> None:
         raise RuntimeError("Rust import failed; refusing to benchmark the fallback")
     start = perf_counter()
     digest = hashlib.sha256()
+    rows = 0
     if layer == "records":
         file = ChatFile(path)
         order = file_date_order(file, native)
-        stream = message_records(file, order, native)
+        for record in message_records(file, order, native):
+            digest.update(
+                json.dumps(
+                    record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                ).encode()
+            )
+            digest.update(b"\n")
+            rows += 1
     else:
         ctx = ImportContext(path.parent, ZoneInfo("Europe/Bucharest"), frozenset({"Alex Demo"}))
-        stream = CONNECTOR.parse(path, ctx)
-    rows = 0
-    for record in stream:
-        value = record if layer == "records" else record.model_dump(mode="json")
-        digest.update(
-            json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
-        )
-        digest.update(b"\n")
-        rows += 1
+        for message in CONNECTOR.parse(path, ctx):
+            digest.update(
+                json.dumps(
+                    message.model_dump(mode="json"),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            )
+            digest.update(b"\n")
+            rows += 1
     elapsed = perf_counter() - start
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     rss_mb = rss / (1024**2 if sys.platform == "darwin" else 1024)
@@ -92,8 +102,10 @@ def main() -> None:
             print(result.stdout.strip(), flush=True)
             results[layer, backend] = json.loads(result.stdout)
         py, rs = results[layer, "python"], results[layer, "rust"]
-        assert py["rows"] == rs["rows"]
-        assert py["sha256"] == rs["sha256"]
+        if py["rows"] != rs["rows"]:
+            raise ValueError(f"{layer} row counts differ between backends")
+        if py["sha256"] != rs["sha256"]:
+            raise ValueError(f"{layer} digests differ between backends")
         print(json.dumps(dict(layer=layer, speedup=py["seconds"] / rs["seconds"])), flush=True)
 
 

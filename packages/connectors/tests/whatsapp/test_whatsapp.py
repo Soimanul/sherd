@@ -126,11 +126,18 @@ def test_date_order_detection(lines: list[str], order: str) -> None:
     assert detect_date_order(iter(lines)) == order
 
 
-def test_date_order_mixed_leading_marks_parity(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "line",
+    [
+        "\u200e\ufeff01/13/24, 09:00 - Mira Example: synthetic\n",
+        "\u200e\ufeff01/13/24,\u200e 09:00 - Mira Example: synthetic\n",
+    ],
+)
+def test_date_order_mixed_leading_marks_parity(tmp_path: Path, line: str) -> None:
     from sherd_connectors.whatsapp.parser import ChatFile, file_date_order
 
     path = tmp_path / "_chat.txt"
-    path.write_text("\u200e\ufeff01/13/24, 09:00 - Mira Example: synthetic\n")
+    path.write_text(line)
     file = ChatFile(path)
     assert file_date_order(file, None) == file_date_order(file, import_module("sherd_wa")) == "md"
 

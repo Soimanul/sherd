@@ -27,8 +27,20 @@ stop and ask the coordinator instead of guessing.
   No AI attribution or co-author footers.
 
 ## The gate
-- `scripts/check` is the one gate: format check, lint, types, PII scan, tests. CI runs exactly it.
-  Run it before you report done, and report its real result. A skipped or zero-test run is not a pass.
+- `scripts/check` is the one gate: format check, lint, types, PII scan, tests. CI runs exactly it on
+  every PR, and a PR merges only when CI is green.
+- On this machine, run only the tests your change touches (plus format, lint and types on the files
+  you changed); do not run the full suite locally — CI does that once per PR. Report exactly what you
+  ran and its real result. A skipped or zero-test run is not a pass.
+
+## Machine resources (shared Mac, 16 GB)
+- One heavy test run at a time across all projects: before a long or memory-heavy run (benchmarks,
+  large synthetic files, full suites), check `pgrep -fl "pytest|cargo test"` and wait if another runs.
+- Quit any app you started for automation (browsers, etc.) when done; no stray `caffeinate`.
+- Heavy runs only while the Mac is on AC power (`pmset -g batt`).
+
+## Messages to the coordinator
+- No heartbeat messages. Send an `ask` only when blocked, and exactly one completion message.
 
 ## Branches (PLAN.md §15)
 - Work in your own Orca worktree on a branch from `dev`. Never commit to `dev` or `main`, never

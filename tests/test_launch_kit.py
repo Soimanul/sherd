@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import typer
 from sherd_cli.main import app
 from sherd_core import Store
 from sherd_insights import wrapped
@@ -31,6 +32,14 @@ def commands(text: str) -> list[list[str]]:
     ]
 
 
+def command_options(name: str) -> set[str]:
+    """Option names of a CLI command, read from Click rather than from rendered help."""
+    group = typer.main.get_command(app)
+    assert isinstance(group, typer.core.TyperGroup)
+    command = group.commands[name]
+    return {opt for param in command.params for opt in (*param.opts, *param.secondary_opts)}
+
+
 def test_commands_and_flags_are_in_real_help() -> None:
     checked = 0
     for doc in LAUNCH.glob("*.md"):
@@ -39,8 +48,9 @@ def test_commands_and_flags_are_in_real_help() -> None:
             command = tokens[1]
             result = RUNNER.invoke(app, [command, "--help"])
             assert result.exit_code == 0, f"{doc.name}: {command}: {result.output}"
-            for flag in (part for part in tokens[2:] if part.startswith("--")):
-                assert flag in result.output, f"{doc.name}: {flag} missing from {command} help"
+            options = command_options(command)
+            for flag in (part.split("=")[0] for part in tokens[2:] if part.startswith("--")):
+                assert flag in options, f"{doc.name}: {flag} is not an option of {command}"
             checked += 1
     assert checked >= 15
 

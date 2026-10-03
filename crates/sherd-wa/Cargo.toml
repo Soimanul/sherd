@@ -1,0 +1,18 @@
+[package]
+name = "sherd-wa"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+
+[lib]
+name = "_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.27", features = ["abi3-py312"] }
+regex = "1"
+memchr = "2"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[features]
+extension-module = ["pyo3/extension-module"]

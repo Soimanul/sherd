@@ -12,7 +12,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv python install 3.12
       - run: uv sync --locked --all-packages
       - run: scripts/check
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv python install 3.12
+      - run: cargo test --locked --manifest-path crates/sherd-wa/Cargo.toml
+      - run: cargo clippy --locked --manifest-path crates/sherd-wa/Cargo.toml -- -D warnings
+      - run: cargo fmt --manifest-path crates/sherd-wa/Cargo.toml --check
+      - run: uvx maturin build --locked --release --manifest-path crates/sherd-wa/Cargo.toml --interpreter "$(uv python find 3.12)" --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sherd-wa-wheels
+          path: dist/*.whl

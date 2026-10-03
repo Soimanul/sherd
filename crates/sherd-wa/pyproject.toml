@@ -1,0 +1,16 @@
+[project]
+name = "sherd-wa"
+version = "0.0.0"
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["extension-module"]
+python-source = "python"
+module-name = "sherd_wa._native"
+
+[tool.uv]
+cache-keys = ["pyproject.toml", "Cargo.toml", "Cargo.lock", { file = "src/**/*.rs" }, { file = "python/**/*.py*" }]

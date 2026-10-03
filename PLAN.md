@@ -527,11 +527,11 @@ Light workflow: one build, one cross-model review, one fix round; the coordinato
 
 ## 12. Open decisions
 
-1. **\[OPEN\] Licence.** Recommendation: **Apache-2.0** for v1. Blocks WP-06 (vendoring) and WP-20; the repo has no LICENSE file until decided.
-2. **\[OPEN\] Default LLM path.** Recommendation: detect Ollama; if absent, guide to BYO key; never require either for Show. Blocks WP-13.
+1. **\[DECIDED\] Licence:** **Apache-2.0** (Vlad, 2026-10-03). `LICENSE` at the repo root; every distribution declares it.
+2. **\[DECIDED\] Default LLM path** (Vlad, 2026-10-03): as shipped in `sherd_agent/providers.toml` — local Ollama first, then Anthropic, then OpenAI, each only if available; remote providers need a key and one-time consent; Show never needs either.
 3. **\[DECIDED\] Web UI framework:** HTMX + Jinja unless WP-14b shows a hard limitation.
 4. **\[OPEN\] Banks beyond Revolut** for launch (ING, BT testable locally; N26/Wise popular). The YAML mapper ships regardless. Blocks WP-07's bank list only.
-5. **\[OPEN\] Wrapped defaults:** which 6 cards; contact names as initials by default (recommended). Blocks WP-18.
+5. **\[DECIDED\] Wrapped defaults** (Vlad, 2026-10-03): the six cards shipped in WP-18; contacts as initials and no money amounts unless `--names` / `--amounts`.
 6. **\[OPEN\] Location in v1?** Recommendation: no; ship two weeks after launch.
 7. **\[OPEN\] Name reservations:** `sherd-cli` (PyPI), `sherd-dev` (GitHub), `sherd-wa` (crates.io), a domain — Vlad, all on the same day.
 

@@ -6,7 +6,7 @@
 
 **Body:** Lead image: [2025 Wrapped card](images/wrapped-2025-1.png). Other [cards](images/wrapped-2025-2.png) and the [dashboard](images/demo-dashboard.png) show the same demo database. All people, messages, plays and payments are **synthetic demo data**, not my history. I made the charts with sherd: Python connectors, DuckDB queries, Vega-Lite specs and vl-convert PNG rendering. The six Wrapped cards hide full contact names and currency amounts by default. `sherd demo && sherd web --demo` reproduces the dashboard. What comparison would make this more useful than a year-end total?
 
-**Rule to respect:** [OC] needs original work, clear data source and tools; identify this as synthetic in the post, not just a comment.
+**Rule to respect:** [OC] posts must cite the data source and the tools in a top-level comment by the poster; post it right away (source: sherd synthetic demo data; tools: sherd, DuckDB, Vega-Lite, vl-convert), and keep the title saying the data is synthetic.
 
 ## r/selfhosted
 

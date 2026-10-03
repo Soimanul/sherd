@@ -6,9 +6,10 @@ I built sherd to put old exports back to work. `sherd dig PATH` detects and impo
 
 The five connector families currently cover WhatsApp chat text, Spotify listening history, Google Takeout's YouTube/Search/Chrome histories, Revolut CSV and mapped bank CSV, and timestamped zsh/bash or Atuin history. There are 22 built-in digs. The stack is Python, DuckDB, and a Rust WhatsApp parser. The licence is Apache-2.0.
 
-Try the synthetic dataset in about a minute after installing:
+Try it on synthetic data in about a minute (macOS or Linux):
 
 ```sh
+uv tool install sherd-cli   # or: pipx install sherd-cli
 sherd demo && sherd web --demo
 ```
 

@@ -205,8 +205,8 @@ path = Path(sys.argv[2])
 ctx = ImportContext(export_root(path), ZoneInfo(sys.argv[3]), frozenset())
 rows = sum(1 for _ in connector.parse(path, ctx))
 peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-peak_mb = peak / 2**20 if sys.platform == "darwin" else peak / 2**10
-print(json.dumps({"rows": rows, "peak_rss_mb": peak_mb}))
+print(rows)
+print(peak)
 """
 
 
@@ -243,8 +243,9 @@ def measure_streaming(
     if completed.returncode != 0:
         tail = completed.stderr.strip().splitlines()[-1:] or ["no output"]
         raise AssertionError(f"{connector.id} parse failed in the child process: {tail[0]}")
-    result: dict[str, Any] = json.loads(completed.stdout.strip().splitlines()[-1])
-    return result
+    rows, peak = completed.stdout.strip().splitlines()[-2:]
+    peak_rss_mb = int(peak) / (2**20 if sys.platform == "darwin" else 2**10)
+    return {"rows": int(rows), "peak_rss_mb": peak_rss_mb}
 
 
 def assert_streaming(

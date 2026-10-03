@@ -1,4 +1,6 @@
 import random
+import subprocess
+import sys
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -81,6 +83,21 @@ def big_export(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def test_streaming_parse_stays_under_200_mb(big_export: Path) -> None:
     assert big_export.stat().st_size >= 50 * MB
     assert_streaming(StreamingLines(), big_export, max_rss_mb=200)
+
+
+def test_prior_memory_heavy_child_does_not_affect_measurement(tmp_path: Path) -> None:
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "data = bytearray(420 * 2**20)\n"
+            "for offset in range(0, len(data), 4096): data[offset] = 1\n",
+        ],
+        check=True,
+    )
+    export = tmp_path / "small.lines"
+    export.write_text("2024-01-01T00:00:00+00:00|git status\n", encoding="utf-8")
+    assert_streaming(StreamingLines(), export, max_rss_mb=200)
 
 
 def test_loading_parse_is_caught(big_export: Path) -> None:
